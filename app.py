@@ -1033,7 +1033,12 @@ async def get_me(request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    return {"user_id": user["user_id"], "username": user["username"]}
+    user_db = user_get_by_id(user["user_id"])
+    return {
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "role": user_db.get("role", "member") if user_db else "member"
+    }
 
 # ============================================================================
 # API ROUTES

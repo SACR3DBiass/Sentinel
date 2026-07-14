@@ -10,5 +10,3 @@ httpx==0.28.1
 groq==0.13.0
 bcrypt==4.2.1
 PyJWT==2.10.1
-supabase==2.11.0
-reportlab==4.2.5
