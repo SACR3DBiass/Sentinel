@@ -1,0 +1,80 @@
+# ============================================================================
+# CLOUDFLARE WRANGLER CONFIGURATION
+# ============================================================================
+# Configuration for deploying the Cloudflare Email Worker.
+#
+# Setup:
+#   1. Install wrangler: npm install -g wrangler
+#   2. Login: wrangler login
+#   3. Set secrets: wrangler secret put WEBHOOK_URL
+#   4. Deploy: wrangler deploy
+#
+# Documentation: https://developers.cloudflare.com/workers/wrangler/
+# ============================================================================
+
+# Worker name (must be unique)
+name = "phishing-email-worker"
+
+# Entry point
+main = "index.js"
+
+# Compatibility date (required)
+compatibility_date = "2024-01-01"
+
+# Enable Node.js compatibility for crypto operations
+compatibility_flags = ["nodejs_compat"]
+
+# ============================================================================
+# ENVIRONMENT VARIABLES
+# ============================================================================
+# For production, use `wrangler secret put` to store sensitive values:
+#   wrangler secret put WEBHOOK_URL
+#   wrangler secret put WEBHOOK_SECRET
+
+[vars]
+# Your FastAPI backend URL (without trailing slash)
+WEBHOOK_URL = "https://your-api-domain.com"
+
+# Webhook secret for HMAC signature verification
+# IMPORTANT: Change this to a secure random string in production!
+WEBHOOK_SECRET = "change-this-to-a-secure-random-string"
+
+# ============================================================================
+# ROUTES (Optional - for custom domains)
+# ============================================================================
+# Uncomment and configure if you want to route specific emails:
+#
+# [[routes]]
+# pattern = "report@yourdomain.com"
+# zone_name = "yourdomain.com"
+
+# ============================================================================
+# TRIGGERS
+# ============================================================================
+# Email routing is configured in the Cloudflare Dashboard, not here.
+# Go to: Email > Email Routing > Email Workers
+
+# Cron trigger (optional - for periodic tasks)
+# [triggers]
+# crons = ["0 * * * *"]  # Run every hour
+
+# ============================================================================
+# OBSERVABILITY
+# ============================================================================
+[observability]
+enabled = true
+head_sampling_rate = 1  # Sample 100% of requests
+
+# ============================================================================
+# BUILD CONFIGURATION
+# ============================================================================
+# [build]
+# command = "npm install"  # Build command if needed
+
+# ============================================================================
+# DEV CONFIGURATION
+# ============================================================================
+# Local development settings
+[dev]
+port = 8787
+local_protocol = "http"
