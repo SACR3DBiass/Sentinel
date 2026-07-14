@@ -23,6 +23,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException, Header, Request, Query, Response, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
 import httpx
 import bcrypt
@@ -128,6 +129,110 @@ def check_scan_cooldown(user_id: str) -> float:
 def mark_scan_started(user_id: str):
     import time
     _scan_cooldowns[user_id] = time.time()
+
+# ============================================================================
+# GEO-IP LOOKUP + DEVICE PARSING + REQUEST LOGGING
+# ============================================================================
+_geo_cache: dict = {}
+_geo_cache_ttl = 86400
+
+def _lookup_geo(ip: str) -> dict:
+    if ip in _geo_cache:
+        entry = _geo_cache[ip]
+        if time.time() - entry.get("_ts", 0) < _geo_cache_ttl:
+            return entry
+    if ip in ("127.0.0.1", "::1", "localhost"):
+        return {"country": "Local", "region": "Local", "city": "Local", "_ts": time.time()}
+    try:
+        import httpx as _httpx
+        resp = _httpx.get(f"http://ip-api.com/json/{ip}?fields=status,country,regionName,city", timeout=3)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("status") == "success":
+                result = {
+                    "country": data.get("country", ""),
+                    "region": data.get("regionName", ""),
+                    "city": data.get("city", ""),
+                    "_ts": time.time(),
+                }
+                _geo_cache[ip] = result
+                return result
+    except Exception:
+        pass
+    return {"country": "", "region": "", "city": "", "_ts": time.time()}
+
+def _parse_user_agent(ua: str) -> dict:
+    ua_lower = ua.lower()
+    browser = "Unknown"
+    os_name = "Unknown"
+    device_type = "Desktop"
+
+    if "mobile" in ua_lower or "android" in ua_lower and "mobile" in ua_lower:
+        device_type = "Mobile"
+    elif "tablet" in ua_lower or "ipad" in ua_lower:
+        device_type = "Tablet"
+    elif "bot" in ua_lower or "crawler" in ua_lower or "spider" in ua_lower:
+        device_type = "Bot"
+
+    if "edg/" in ua_lower or "edge/" in ua_lower:
+        browser = "Edge"
+    elif "opr/" in ua_lower or "opera" in ua_lower:
+        browser = "Opera"
+    elif "chrome" in ua_lower and "safari" in ua_lower:
+        browser = "Chrome"
+    elif "firefox" in ua_lower:
+        browser = "Firefox"
+    elif "safari" in ua_lower:
+        browser = "Safari"
+    elif "msie" in ua_lower or "trident" in ua_lower:
+        browser = "IE"
+
+    if "windows" in ua_lower:
+        os_name = "Windows"
+    elif "mac os" in ua_lower or "macos" in ua_lower:
+        os_name = "macOS"
+    elif "linux" in ua_lower:
+        os_name = "Linux"
+    elif "android" in ua_lower:
+        os_name = "Android"
+    elif "iphone" in ua_lower or "ipad" in ua_lower:
+        os_name = "iOS"
+
+    return {"browser": browser, "os": os_name, "device_type": device_type}
+
+_ANALYTICS_EXCLUDE_PATHS = {"/static", "/favicon.ico", "/health"}
+_ANALYTICS_SAMPLE_RATE = 1
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        try:
+            path = request.url.path
+            if any(path.startswith(ex) for ex in _ANALYTICS_EXCLUDE_PATHS):
+                return response
+            ip = request.client.host if request.client else "unknown"
+            forwarded = request.headers.get("x-forwarded-for", "")
+            if forwarded:
+                ip = forwarded.split(",")[0].strip()
+            ua_string = request.headers.get("user-agent", "")
+            ua_parsed = _parse_user_agent(ua_string)
+            geo = _lookup_geo(ip)
+            user_info = get_current_user(request)
+            user_id = user_info.get("user_id", "") if user_info else ""
+            username = user_info.get("username", "") if user_info else ""
+            db.request_log_save(
+                ip=ip, path=path, method=request.method, user_agent=ua_string,
+                country=geo.get("country", ""), region=geo.get("region", ""),
+                city=geo.get("city", ""),
+                device_type=ua_parsed.get("device_type", ""),
+                browser=ua_parsed.get("browser", ""),
+                os_name=ua_parsed.get("os", ""),
+                user_id=user_id, username=username,
+                response_status=response.status_code,
+            )
+        except Exception:
+            pass
+        return response
 
 # ============================================================================
 # PYDANTIC SCHEMAS
@@ -831,6 +936,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestLoggingMiddleware)
 
 analyzer = GroqAnalyzer()
 imap_service = IMAPEmailService()
@@ -1890,6 +1996,53 @@ async def db_status():
 
 
 # ============================================================================
+# OWNER-ONLY ACCESS CONTROL
+# ============================================================================
+def require_owner(request: Request) -> dict:
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = user_get_by_id(user["user_id"])
+    if not user_db or user_db.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner access only")
+    return user
+
+
+# ============================================================================
+# ANALYTICS API (Owner Only)
+# ============================================================================
+@app.get("/api/analytics/overview")
+async def analytics_overview(request: Request, days: int = Query(30, ge=1, le=365)):
+    require_owner(request)
+    return db.request_log_stats(days)
+
+@app.get("/api/analytics/ips")
+async def analytics_ips(request: Request, days: int = Query(7, ge=1, le=90)):
+    require_owner(request)
+    return {"ips": db.request_log_unique_ips(days)}
+
+@app.get("/api/analytics/realtime")
+async def analytics_realtime(request: Request):
+    require_owner(request)
+    since = (datetime.utcnow() - timedelta(minutes=15)).isoformat()
+    sb = db.get_supabase()
+    if sb:
+        try:
+            rows = sb.table("request_logs").select("*").gte("created_at", since).execute()
+            data = rows.data or []
+        except Exception:
+            data = []
+    else:
+        import sqlite3 as _s3
+        conn = _s3.connect(os.path.join(db.DATA_DIR, "users.db"))
+        conn.row_factory = _s3.Row
+        rows = conn.execute("SELECT * FROM request_logs WHERE created_at >= ?", (since,)).fetchall()
+        data = [dict(r) for r in rows]
+        conn.close()
+    return {"active_visitors": len(set(r.get("ip", "") for r in data)), "requests": len(data), "recent": data[-50:]}
+
+
+# ============================================================================
 # PAGE ROUTES - HTML FRONTPAGES
 # ============================================================================
 @app.get("/login", response_class=HTMLResponse)
@@ -1916,9 +2069,278 @@ async def page_accept_invite(token: str):
 async def page_marketing():
     return MARKETING_PAGE
 
+@app.get("/analytics", response_class=HTMLResponse)
+async def page_analytics():
+    return ANALYTICS_PAGE
+
 @app.get("/", response_class=HTMLResponse)
 async def page_landing():
     return LANDING_PAGE
+
+# ============================================================================
+# ANALYTICS PAGE (Owner Only)
+# ============================================================================
+ANALYTICS_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENTINEL - Analytics</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #f5f5f5; min-height: 100vh; }
+        .topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 12px 32px; display: flex; justify-content: space-between; align-items: center; background: rgba(10,10,10,0.9); backdrop-filter: blur(20px); border-bottom: 1px solid #1a1a1a; }
+        .topbar-left { display: flex; align-items: center; gap: 16px; }
+        .logo { display: flex; align-items: center; gap: 8px; }
+        .logo svg { width: 28px; height: 28px; filter: drop-shadow(0 0 8px rgba(220,38,38,0.4)); }
+        .logo-text { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; }
+        .nav { display: flex; gap: 6px; }
+        .nav a { padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; color: #888; transition: all 0.2s; }
+        .nav a:hover, .nav a.active { color: #f5f5f5; background: rgba(255,255,255,0.05); }
+        .topbar-right { display: flex; align-items: center; gap: 12px; }
+        .owner-badge { background: linear-gradient(135deg, #DC2626, #991B1B); color: white; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+        .main { padding: 80px 32px 32px; max-width: 1400px; margin: 0 auto; }
+        .page-header { margin-bottom: 24px; }
+        .page-header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
+        .page-header p { color: #888; font-size: 14px; }
+        .controls { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; }
+        .controls select, .controls input { background: #161616; border: 1px solid #2a2a2a; color: #f5f5f5; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-family: inherit; }
+        .controls select:focus, .controls input:focus { outline: none; border-color: #DC2626; }
+        .btn { background: #161616; border: 1px solid #2a2a2a; color: #f5f5f5; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+        .btn:hover { border-color: #555; background: #1e1e1e; }
+        .btn.primary { background: linear-gradient(135deg, #DC2626, #991B1B); border: 1px solid rgba(220,38,38,0.3); }
+        .btn.primary:hover { box-shadow: 0 4px 20px rgba(220,38,38,0.3); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; }
+        .stat-card .label { font-size: 12px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .stat-card .value { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; font-family: 'JetBrains Mono', monospace; }
+        .stat-card .value.red { color: #DC2626; }
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .chart-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; }
+        .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+        .chart-card canvas { width: 100% !important; }
+        .table-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; margin-bottom: 24px; overflow-x: auto; }
+        .table-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px 12px; border-bottom: 1px solid #1e1e1e; color: #888; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
+        td { padding: 10px 12px; border-bottom: 1px solid #1a1a1a; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .tag.desktop { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .tag.mobile { background: rgba(59,130,246,0.15); color: #3b82f6; }
+        .tag.tablet { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .tag.bot { background: rgba(234,179,8,0.15); color: #eab308; }
+        .loading { text-align: center; padding: 60px; color: #888; }
+        .bar-chart-h { display: flex; flex-direction: column; gap: 6px; }
+        .bar-row { display: flex; align-items: center; gap: 10px; }
+        .bar-label { width: 100px; font-size: 12px; color: #aaa; text-align: right; font-family: 'JetBrains Mono', monospace; }
+        .bar-fill-bg { flex: 1; height: 24px; background: #1a1a1a; border-radius: 4px; overflow: hidden; }
+        .bar-fill { height: 100%; background: linear-gradient(90deg, #DC2626, #991B1B); border-radius: 4px; transition: width 0.5s ease; display: flex; align-items: center; padding-left: 8px; font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace; min-width: 30px; }
+        .empty-state { text-align: center; padding: 80px 40px; }
+        .empty-state h2 { font-size: 24px; margin-bottom: 8px; }
+        .empty-state p { color: #888; font-size: 14px; margin-bottom: 20px; }
+        .live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @media (max-width: 768px) {
+            .main { padding: 72px 16px 16px; }
+            .chart-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="topbar-left">
+            <a href="/dashboard" class="logo">
+                <svg viewBox="0 0 36 36" fill="none"><path d="M18 2L3 10v16l15 8 15-8V10L18 2z" fill="url(#g1)" opacity="0.9"/><path d="M18 6l10 5.5v11L18 28 8 22.5v-11L18 6z" fill="#0a0a0a"/><path d="M18 12l-6 3.3v6.6L18 25l6-3.1v-6.6L18 12z" fill="url(#g2)"/><defs><linearGradient id="g1" x1="3" y1="2" x2="33" y2="34"><stop stop-color="#DC2626"/><stop offset="1" stop-color="#991B1B"/></linearGradient><linearGradient id="g2" x1="12" y1="12" x2="24" y2="25"><stop stop-color="#DC2626"/><stop offset="1" stop-color="#991B1B"/></linearGradient></defs></svg>
+                <span class="logo-text">SENTINEL</span>
+            </a>
+            <div class="nav">
+                <a href="/dashboard">Dashboard</a>
+                <a href="/settings">Settings</a>
+                <a href="/analytics" class="active">Analytics</a>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <span class="owner-badge">Owner</span>
+            <a href="/analytics" class="btn" onclick="logout()">Logout</a>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="page-header">
+            <h1>Site Analytics</h1>
+            <p>Track visitor regions, activity times, and device usage</p>
+        </div>
+
+        <div class="controls">
+            <select id="period" onchange="loadAnalytics()">
+                <option value="1">Last 24 Hours</option>
+                <option value="7" selected>Last 7 Days</option>
+                <option value="30">Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+            </select>
+            <button class="btn primary" onclick="loadAnalytics()">Refresh</button>
+            <span style="margin-left: auto; font-size: 13px; color: #888;"><span class="live-dot"></span>Live tracking active</span>
+        </div>
+
+        <div id="loading" class="loading">Loading analytics...</div>
+        <div id="content" style="display: none;">
+            <div class="stats-grid" id="statsGrid"></div>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3>Activity by Hour (UTC)</h3>
+                    <canvas id="hourlyChart" height="200"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Visitors by Region</h3>
+                    <canvas id="countryChart" height="200"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Device Types</h3>
+                    <canvas id="deviceChart" height="200"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Browsers</h3>
+                    <canvas id="browserChart" height="200"></canvas>
+                </div>
+            </div>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3>Operating Systems</h3>
+                    <canvas id="osChart" height="200"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Activity by Day of Week</h3>
+                    <canvas id="dowChart" height="200"></canvas>
+                </div>
+            </div>
+            <div class="chart-card" style="margin-bottom: 24px;">
+                <h3>Top Pages</h3>
+                <div id="topPages"></div>
+            </div>
+            <div class="table-card">
+                <h3>Recent Unique Visitors</h3>
+                <table id="ipTable">
+                    <thead><tr><th>IP Address</th><th>Country</th><th>City</th><th>Device</th><th>Browser</th><th>OS</th><th>Requests</th><th>First Seen</th></tr></thead>
+                    <tbody id="ipBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let charts = {};
+
+    function getCookie(name) {
+        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return v ? v.pop() : null;
+    }
+
+    async function loadAnalytics() {
+        const days = document.getElementById('period').value;
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('content').style.display = 'none';
+        try {
+            const [overviewRes, ipsRes] = await Promise.all([
+                fetch('/api/analytics/overview?days=' + days),
+                fetch('/api/analytics/ips?days=' + days)
+            ]);
+            const overview = await overviewRes.json();
+            const ipsData = await ipsRes.json();
+            if (overview.detail) { window.location.href = '/login'; return; }
+            renderStats(overview);
+            renderCharts(overview);
+            renderTable(ipsData.ips || []);
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+        } catch (e) {
+            document.getElementById('loading').innerHTML = '<div class="empty-state"><h2>Error loading data</h2><p>' + e.message + '</p></div>';
+        }
+    }
+
+    function renderStats(data) {
+        const grid = document.getElementById('statsGrid');
+        grid.innerHTML = [
+            { label: 'Total Requests', value: data.total_requests.toLocaleString(), cls: '' },
+            { label: 'Unique IPs', value: data.unique_ips.toLocaleString(), cls: 'red' },
+            { label: 'Unique Users', value: data.unique_users.toLocaleString(), cls: '' },
+            { label: 'Countries', value: Object.keys(data.countries).length, cls: '' },
+            { label: 'Top Country', value: Object.entries(data.countries).sort((a,b)=>b[1]-a[1])[0]?.[0] || '-', cls: 'red' },
+            { label: 'Top Browser', value: Object.entries(data.browsers).sort((a,b)=>b[1]-a[1])[0]?.[0] || '-', cls: '' },
+        ].map(s => '<div class="stat-card"><div class="label">' + s.label + '</div><div class="value ' + s.cls + '">' + s.value + '</div></div>').join('');
+    }
+
+    function renderCharts(data) {
+        Object.values(charts).forEach(c => c.destroy());
+        charts = {};
+        const redGrad = (ctx) => {
+            const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 300);
+            g.addColorStop(0, 'rgba(220,38,38,0.4)'); g.addColorStop(1, 'rgba(220,38,38,0.02)');
+            return g;
+        };
+        const baseOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#888', font: { size: 11 } }, grid: { color: '#1a1a1a' } }, y: { ticks: { color: '#888', font: { size: 11 } }, grid: { color: '#1a1a1a' } } } };
+        const pieOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#ccc', font: { size: 12 }, padding: 12 } } } };
+        const colors = ['#DC2626','#F97316','#EAB308','#22C55E','#3B82F6','#A855F7','#EC4899','#14B8A6','#6366F1','#F43F5E'];
+
+        const hours = Object.keys(data.hourly_distribution).sort();
+        charts.hourly = new Chart(document.getElementById('hourlyChart'), {
+            type: 'bar', data: { labels: hours.map(h => h + ':00'), datasets: [{ data: hours.map(h => data.hourly_distribution[h]), backgroundColor: redGrad, borderColor: '#DC2626', borderWidth: 1, borderRadius: 4 }] }, options: baseOpts
+        });
+
+        const countries = Object.entries(data.countries).sort((a,b) => b[1]-a[1]).slice(0, 10);
+        charts.country = new Chart(document.getElementById('countryChart'), {
+            type: 'bar', data: { labels: countries.map(c => c[0]), datasets: [{ data: countries.map(c => c[1]), backgroundColor: colors.slice(0, countries.length), borderRadius: 4 }] }, options: { ...baseOpts, indexAxis: 'y' }
+        });
+
+        const devs = Object.entries(data.devices);
+        charts.device = new Chart(document.getElementById('deviceChart'), {
+            type: 'doughnut', data: { labels: devs.map(d => d[0]), datasets: [{ data: devs.map(d => d[1]), backgroundColor: colors.slice(0, devs.length), borderWidth: 0 }] }, options: pieOpts
+        });
+
+        const browsers = Object.entries(data.browsers).sort((a,b) => b[1]-a[1]);
+        charts.browser = new Chart(document.getElementById('browserChart'), {
+            type: 'doughnut', data: { labels: browsers.map(b => b[0]), datasets: [{ data: browsers.map(b => b[1]), backgroundColor: colors.slice(0, browsers.length), borderWidth: 0 }] }, options: pieOpts
+        });
+
+        const oses = Object.entries(data.oses).sort((a,b) => b[1]-a[1]);
+        charts.os = new Chart(document.getElementById('osChart'), {
+            type: 'doughnut', data: { labels: oses.map(o => o[0]), datasets: [{ data: oses.map(o => o[1]), backgroundColor: colors.slice(0, oses.length), borderWidth: 0 }] }, options: pieOpts
+        });
+
+        const dowOrder = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+        const dowData = dowOrder.map(d => data.daily_distribution[d] || 0);
+        charts.dow = new Chart(document.getElementById('dowChart'), {
+            type: 'bar', data: { labels: dowOrder.map(d => d.slice(0,3)), datasets: [{ data: dowData, backgroundColor: redGrad, borderColor: '#DC2626', borderWidth: 1, borderRadius: 4 }] }, options: baseOpts
+        });
+
+        const topPaths = Object.entries(data.top_paths).slice(0, 10);
+        const maxCount = topPaths[0]?.[1] || 1;
+        document.getElementById('topPages').innerHTML = '<div class="bar-chart-h">' + topPaths.map(([path, count]) =>
+            '<div class="bar-row"><div class="bar-label">' + path + '</div><div class="bar-fill-bg"><div class="bar-fill" style="width:' + Math.round((count/maxCount)*100) + '%">' + count + '</div></div></div>'
+        ).join('') + '</div>';
+    }
+
+    function renderTable(ips) {
+        const body = document.getElementById('ipBody');
+        body.innerHTML = ips.map(ip => {
+            const devCls = (ip.device_type || '').toLowerCase();
+            return '<tr><td>' + ip.ip + '</td><td>' + (ip.country || '-') + '</td><td>' + (ip.city || '-') + '</td><td><span class="tag ' + devCls + '">' + (ip.device_type || '-') + '</span></td><td>' + (ip.browser || '-') + '</td><td>' + (ip.os || '-') + '</td><td>' + ip.request_count + '</td><td>' + new Date(ip.first_seen).toLocaleDateString() + '</td></tr>';
+        }).join('');
+    }
+
+    async function logout() {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/login';
+    }
+
+    loadAnalytics();
+    setInterval(loadAnalytics, 60000);
+    </script>
+</body>
+</html>"""
 
 # ============================================================================
 # LANDING PAGE

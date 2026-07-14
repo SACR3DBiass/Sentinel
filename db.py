@@ -1265,3 +1265,185 @@ class FeedbackCache:
 
 # Global cache instance
 feedback_cache = FeedbackCache()
+
+# ============================================================================
+# REQUEST LOGGING & ANALYTICS
+# ============================================================================
+
+def _init_request_logs_db():
+    conn = _sqlite3.connect(_USERS_DB)
+    conn.execute("""CREATE TABLE IF NOT EXISTS request_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip TEXT NOT NULL,
+        path TEXT NOT NULL,
+        method TEXT NOT NULL,
+        user_agent TEXT,
+        country TEXT DEFAULT '',
+        region TEXT DEFAULT '',
+        city TEXT DEFAULT '',
+        device_type TEXT DEFAULT '',
+        browser TEXT DEFAULT '',
+        os TEXT DEFAULT '',
+        user_id TEXT DEFAULT '',
+        username TEXT DEFAULT '',
+        response_status INTEGER DEFAULT 200,
+        created_at TEXT NOT NULL
+    )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_request_logs_created_at ON request_logs(created_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_request_logs_ip ON request_logs(ip)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_request_logs_path ON request_logs(path)")
+    conn.commit()
+    conn.close()
+
+_init_request_logs_db()
+
+def request_log_save(ip: str, path: str, method: str, user_agent: str,
+                     country: str = "", region: str = "", city: str = "",
+                     device_type: str = "", browser: str = "", os_name: str = "",
+                     user_id: str = "", username: str = "", response_status: int = 200):
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("request_logs").insert({
+                "ip": ip, "path": path, "method": method, "user_agent": user_agent,
+                "country": country, "region": region, "city": city,
+                "device_type": device_type, "browser": browser, "os": os_name,
+                "user_id": user_id, "username": username,
+                "response_status": response_status,
+                "created_at": datetime.utcnow().isoformat(),
+            }).execute()
+            return
+        except Exception:
+            pass
+    # Local fallback
+    try:
+        conn = _sqlite3.connect(_USERS_DB)
+        conn.execute(
+            "INSERT INTO request_logs (ip,path,method,user_agent,country,region,city,device_type,browser,os,user_id,username,response_status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (ip, path, method, user_agent, country, region, city, device_type, browser, os_name, user_id, username, response_status, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+def request_log_stats(days: int = 30) -> dict:
+    """Get analytics stats for the last N days."""
+    sb = get_supabase()
+    since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+
+    if sb:
+        try:
+            rows = sb.table("request_logs").select("*").gte("created_at", since).execute()
+            data = rows.data or []
+        except Exception:
+            data = []
+    else:
+        try:
+            conn = _sqlite3.connect(_USERS_DB)
+            conn.row_factory = _sqlite3.Row
+            rows = conn.execute("SELECT * FROM request_logs WHERE created_at >= ?", (since,)).fetchall()
+            data = [dict(r) for r in rows]
+            conn.close()
+        except Exception:
+            data = []
+
+    total = len(data)
+    unique_ips = len(set(r.get("ip", "") for r in data))
+    unique_users = len(set(r.get("user_id", "") for r in data if r.get("user_id")))
+
+    countries = {}
+    regions = {}
+    cities = {}
+    devices = {}
+    browsers = {}
+    oses = {}
+    hours = {str(h): 0 for h in range(24)}
+    days_of_week = {}
+    paths = {}
+
+    for r in data:
+        c = r.get("country") or "Unknown"
+        countries[c] = countries.get(c, 0) + 1
+        reg = r.get("region") or "Unknown"
+        regions[reg] = regions.get(reg, 0) + 1
+        ci = r.get("city") or "Unknown"
+        cities[ci] = cities.get(ci, 0) + 1
+        d = r.get("device_type") or "Unknown"
+        devices[d] = devices.get(d, 0) + 1
+        b = r.get("browser") or "Unknown"
+        browsers[b] = browsers.get(b, 0) + 1
+        o = r.get("os") or "Unknown"
+        oses[o] = oses.get(o, 0) + 1
+        p = r.get("path") or "/"
+        paths[p] = paths.get(p, 0) + 1
+
+        ts = r.get("created_at", "")
+        try:
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            hours[str(dt.hour)] = hours.get(str(dt.hour), 0) + 1
+            dow = dt.strftime("%A")
+            days_of_week[dow] = days_of_week.get(dow, 0) + 1
+        except Exception:
+            pass
+
+    return {
+        "total_requests": total,
+        "unique_ips": unique_ips,
+        "unique_users": unique_users,
+        "period_days": days,
+        "countries": countries,
+        "regions": regions,
+        "cities": cities,
+        "devices": devices,
+        "browsers": browsers,
+        "oses": oses,
+        "hourly_distribution": hours,
+        "daily_distribution": days_of_week,
+        "top_paths": dict(sorted(paths.items(), key=lambda x: -x[1])[:20]),
+    }
+
+def request_log_unique_ips(days: int = 7) -> List[dict]:
+    """Get unique IPs with their info for the last N days."""
+    sb = get_supabase()
+    since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+    if sb:
+        try:
+            rows = sb.table("request_logs").select("ip,country,region,city,device_type,browser,os,created_at").gte("created_at", since).execute()
+            data = rows.data or []
+        except Exception:
+            data = []
+    else:
+        try:
+            conn = _sqlite3.connect(_USERS_DB)
+            conn.row_factory = _sqlite3.Row
+            rows = conn.execute("SELECT ip,country,region,city,device_type,browser,os,created_at FROM request_logs WHERE created_at >= ?", (since,)).fetchall()
+            data = [dict(r) for r in rows]
+            conn.close()
+        except Exception:
+            data = []
+
+    seen = {}
+    for r in data:
+        ip = r.get("ip", "")
+        if ip not in seen:
+            seen[ip] = {
+                "ip": ip,
+                "country": r.get("country", ""),
+                "region": r.get("region", ""),
+                "city": r.get("city", ""),
+                "device_type": r.get("device_type", ""),
+                "browser": r.get("browser", ""),
+                "os": r.get("os", ""),
+                "first_seen": r.get("created_at", ""),
+                "last_seen": r.get("created_at", ""),
+                "request_count": 0,
+            }
+        seen[ip]["request_count"] += 1
+        ts = r.get("created_at", "")
+        if ts < seen[ip]["first_seen"]:
+            seen[ip]["first_seen"] = ts
+        if ts > seen[ip]["last_seen"]:
+            seen[ip]["last_seen"] = ts
+
+    return sorted(seen.values(), key=lambda x: -x["request_count"])

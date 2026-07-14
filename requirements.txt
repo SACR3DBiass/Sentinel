@@ -1,14 +1,14 @@
 # SENTINEL - AI-Powered Phishing Triage Agent
 # Install: pip install -r requirements.txt
 
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-gunicorn>=21.2.0
-pydantic>=2.6.0
-python-dotenv>=1.0.0
-httpx>=0.26.0
-groq>=0.4.0
-bcrypt>=4.1.0
-PyJWT>=2.8.0
-supabase>=2.0.0
-reportlab>=4.0.0
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+gunicorn==23.0.0
+pydantic==2.10.4
+python-dotenv==1.0.1
+httpx==0.28.1
+groq==0.13.0
+bcrypt==4.2.1
+PyJWT==2.10.1
+supabase==2.11.0
+reportlab==4.2.5
