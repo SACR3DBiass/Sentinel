@@ -7,7 +7,7 @@ services:
     startCommand: gunicorn app:app --host 0.0.0.0 --port $PORT --workers 2 --timeout 120
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11
+        value: "3.11"
       - key: GROQ_API_KEY
         sync: false
       - key: SUPABASE_URL
@@ -15,11 +15,9 @@ services:
       - key: SUPABASE_KEY
         sync: false
       - key: JWT_SECRET
-        generateValue: true
-      - key: WEBHOOK_SECRET
-        generateValue: true
+        value: sentinel-prod-jwt-secret-2024
       - key: APP_VERSION
-        value: 3.0.0
+        value: 4.0.0
       - key: COST_PER_INCIDENT
         value: 4500
       - key: IMAP_SERVER
