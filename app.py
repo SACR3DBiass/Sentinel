@@ -2956,6 +2956,8 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
             var teamLoading = _teamLoading[0], setTeamLoading = _teamLoading[1];
             var _inviteEmail = useState('');
             var inviteEmail = _inviteEmail[0], setInviteEmail = _inviteEmail[1];
+            var _userRole = useState('');
+            var userRole = _userRole[0], setUserRole = _userRole[1];
 
             var addToast = useCallback(function(type, message) {
                 var id = ++toastId.current;
@@ -2972,6 +2974,10 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
             }, []);
 
             var fetchUserRole = useCallback(function() {
+                fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + getToken() } })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) { if (data.role) setUserRole(data.role); })
+                    .catch(function() {});
                 API.get('/org').then(function(data) {
                     if (data.org) setTeamRole('admin');
                 }).catch(function() {});
@@ -3109,6 +3115,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                             React.createElement('button', { onClick:function() { setView('dashboard'); }, style:Object.assign({}, btnDark, { background:view==='dashboard'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='dashboard'?'rgba(220,38,38,0.4)':'#282828', color:view==='dashboard'?'#EF4444':'#a0a0a0' }) }, 'Dashboard'),
                             React.createElement('button', { onClick:function() { setView('team'); fetchTeam(); }, style:Object.assign({}, btnDark, { background:view==='team'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='team'?'rgba(220,38,38,0.4)':'#282828', color:view==='team'?'#EF4444':'#a0a0a0' }) }, 'Team'),
                             React.createElement('button', { onClick:function() { window.location.href='/settings'; }, style:btnDark }, 'Settings'),
+                            userRole === 'owner' ? React.createElement('button', { onClick:function() { window.location.href='/analytics'; }, style:Object.assign({}, btnDark, {borderColor:'rgba(168,85,247,0.3)',color:'#C084FC'}) }, 'Analytics') : null,
                             React.createElement('button', { onClick:function() { setShowPaste(true); }, style:btnDark }, 'Paste Email'),
                             React.createElement('button', { onClick:function() { window.open('/api/v1/reports/monthly', '_blank'); }, style:Object.assign({}, btnDark, {borderColor:'rgba(34,197,94,0.3)',color:'#86EFAC'}) }, '\\u2B07 Executive Report'),
                             connections.length > 0 ? React.createElement('select', {
