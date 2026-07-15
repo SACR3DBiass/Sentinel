@@ -2200,7 +2200,7 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
         </div>
         <div class="topbar-right">
             <span class="owner-badge">Owner</span>
-            <a href="/analytics" class="btn" onclick="logout()">Logout</a>
+            <a href="/dashboard" class="btn" onclick="event.preventDefault(); logout()">Logout</a>
         </div>
     </div>
 
@@ -2269,20 +2269,23 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
     <script>
     let charts = {};
 
-    function getCookie(name) {
-        const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-        return v ? v.pop() : null;
+    function getToken() { return localStorage.getItem('sentinel_token'); }
+
+    function authHeaders() {
+        return { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' };
     }
 
     async function loadAnalytics() {
+        if (!getToken()) { window.location.href = '/login'; return; }
         const days = document.getElementById('period').value;
         document.getElementById('loading').style.display = 'block';
         document.getElementById('content').style.display = 'none';
         try {
             const [overviewRes, ipsRes] = await Promise.all([
-                fetch('/api/analytics/overview?days=' + days),
-                fetch('/api/analytics/ips?days=' + days)
+                fetch('/api/analytics/overview?days=' + days, { headers: authHeaders() }),
+                fetch('/api/analytics/ips?days=' + days, { headers: authHeaders() })
             ]);
+            if (overviewRes.status === 401 || overviewRes.status === 403) { window.location.href = '/login'; return; }
             const overview = await overviewRes.json();
             const ipsData = await ipsRes.json();
             if (overview.detail) { window.location.href = '/login'; return; }
@@ -3796,7 +3799,7 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                     React.createElement('span', { style:stepNum }, '3'),
                     React.createElement('div', null,
                         React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Generate the Password'),
-                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Under "App name", type something like "Sentinel" and click ', React.createElement('span', { style:{fontWeight:600,color:'#ccc'} }, 'Create')., '. Google will show you a 16-character password.')
+                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Under "App name", type something like "Sentinel" and click ', React.createElement('span', { style:{fontWeight:600,color:'#ccc'} }, 'Create'), '. Google will show you a 16-character password.')
                     )
                 ),
                 React.createElement('div', { style:guideStep },
