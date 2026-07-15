@@ -3750,6 +3750,8 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             var form = _s[0], setForm = _s[1];
             var _submitting = useState(false);
             var submitting = _submitting[0], setSubmitting = _submitting[1];
+            var _showGuide = useState(false);
+            var showGuide = _showGuide[0], setShowGuide = _showGuide[1];
             var inputStyle = { width:'100%', padding:'10px 14px', background:'#0a0a0a', border:'1px solid #222', borderRadius:8, color:'#f5f5f5', fontSize:13, fontFamily:'Inter', outline:'none' };
 
             var providers = { gmail:{host:'imap.gmail.com',port:993}, outlook:{host:'outlook.office365.com',port:993}, yahoo:{host:'imap.mail.yahoo.com',port:993}, custom:{host:'',port:993} };
@@ -3770,6 +3772,66 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             };
 
             var labelStyle = {fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6};
+            var stepNum = {display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#DC2626,#991B1B)',color:'#fff',fontSize:11,fontWeight:700,flexShrink:0,marginRight:8};
+            var guideStep = {display:'flex',alignItems:'flex-start',marginBottom:14};
+
+            var gmailGuide = React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:10,padding:16,marginBottom:14} },
+                React.createElement('div', { style:{fontSize:13,fontWeight:700,color:'#EF4444',marginBottom:12} }, 'How to Create a Gmail App Password'),
+                React.createElement('div', { style:{fontSize:12,color:'#888',marginBottom:12} }, 'Google requires an "App Password" instead of your regular password for IMAP access. This is a one-time setup.'),
+                React.createElement('div', { style:guideStep },
+                    React.createElement('span', { style:stepNum }, '1'),
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Enable 2-Step Verification'),
+                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Go to ', React.createElement('a', { href:'https://myaccount.google.com/security', target:'_blank', style:{color:'#EF4444'} }, 'myaccount.google.com/security'), ' and turn on 2-Step Verification if you haven\'t already. This is required before you can create an app password.')
+                    )
+                ),
+                React.createElement('div', { style:guideStep },
+                    React.createElement('span', { style:stepNum }, '2'),
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Open App Passwords Page'),
+                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Go to ', React.createElement('a', { href:'https://myaccount.google.com/apppasswords', target:'_blank', style:{color:'#EF4444'} }, 'myaccount.google.com/apppasswords'), ' directly. You may be asked to sign in again.')
+                    )
+                ),
+                React.createElement('div', { style:guideStep },
+                    React.createElement('span', { style:stepNum }, '3'),
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Generate the Password'),
+                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Under "App name", type something like "Sentinel" and click ', React.createElement('span', { style:{fontWeight:600,color:'#ccc'} }, 'Create')., '. Google will show you a 16-character password.')
+                    )
+                ),
+                React.createElement('div', { style:guideStep },
+                    React.createElement('span', { style:stepNum }, '4'),
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Copy & Paste the Password'),
+                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Copy the 16-character password (e.g. abcd efgh ijkl mnop) and paste it in the App Password field below. ', React.createElement('span', { style:{color:'#EF4444',fontWeight:600} }, 'Remove the spaces'), ' when pasting.')
+                    )
+                ),
+                React.createElement('div', { style:guideStep },
+                    React.createElement('span', { style:stepNum }, '5'),
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'You\'re Done!'),
+                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Click "Add Connection" below. Sentinel will verify your credentials by logging into your inbox via IMAP.')
+                    )
+                )
+            );
+
+            var outlookGuide = React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:10,padding:16,marginBottom:14} },
+                React.createElement('div', { style:{fontSize:13,fontWeight:700,color:'#3B82F6',marginBottom:12} }, 'How to Create a Microsoft App Password'),
+                React.createElement('div', { style:guideStep },
+                    React.createElement('span', { style:stepNum }, '1'),
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Go to Microsoft Account Security'),
+                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Visit ', React.createElement('a', { href:'https://account.microsoft.com/security', target:'_blank', style:{color:'#3B82F6'} }, 'account.microsoft.com/security'), ' and sign in.')
+                    )
+                ),
+                React.createElement('div', { style:guideStep },
+                    React.createElement('span', { style:stepNum }, '2'),
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Create an App Password'),
+                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Click "Create a new app password" under the "App passwords" section. Copy the generated password and paste it below.')
+                    )
+                )
+            );
 
             return React.createElement('div', null,
                 React.createElement('div', { style:{marginBottom:14} },
@@ -3805,9 +3867,15 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                 ),
                 React.createElement('div', { style:{marginBottom:14} },
                     React.createElement('label', { style:labelStyle }, 'App Password'),
-                    React.createElement('input', { type:'password', value:form.imap_password, onChange:function(e) { handleChange('imap_password', e.target.value); }, placeholder:'Use an app-specific password', style:inputStyle }),
-                    React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:4} }, 'For Gmail: Generate at myaccount.google.com/apppasswords')
+                    React.createElement('input', { type:'password', value:form.imap_password, onChange:function(e) { handleChange('imap_password', e.target.value); }, placeholder:'16-character app password', style:inputStyle }),
+                    React.createElement('button', { onClick:function() { setShowGuide(!showGuide); }, style:{background:'none',border:'none',color:'#EF4444',fontSize:11,fontWeight:600,cursor:'pointer',padding:'4px 0',marginTop:4,fontFamily:'Inter'} }, showGuide ? '\u25B2 Hide instructions' : '\u25BC How to create an app password')
                 ),
+                form.provider === 'gmail' && showGuide ? gmailGuide : null,
+                form.provider === 'outlook' && showGuide ? outlookGuide : null,
+                form.provider !== 'gmail' && form.provider !== 'outlook' && showGuide ? React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:10,padding:16,marginBottom:14} },
+                    React.createElement('div', { style:{fontSize:13,fontWeight:700,color:'#EAB308',marginBottom:8} }, 'App Password'),
+                    React.createElement('div', { style:{fontSize:11,color:'#888',lineHeight:1.5} }, 'Contact your email provider for instructions on creating an app-specific password for IMAP access.')
+                ) : null,
                 React.createElement('div', { style:{marginBottom:20} },
                     React.createElement('label', { style:labelStyle }, 'Scan Interval (minutes)'),
                     React.createElement('input', { type:'number', value:form.scan_interval, onChange:function(e) { handleChange('scan_interval', parseInt(e.target.value)||30); }, min:5, max:1440, style:inputStyle })
