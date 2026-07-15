@@ -43,9 +43,10 @@ def is_supabase_available() -> bool:
 # USER OPERATIONS (Cloud)
 # ============================================================================
 
-def user_create(username: str, email: str, password_hash: str, org_id: str = None) -> Optional[dict]:
+def user_create(username: str, email: str, password_hash: str, org_id: str = None, user_id: str = None) -> Optional[dict]:
     sb = get_supabase()
-    user_id = str(uuid.uuid4())
+    if not user_id:
+        user_id = str(uuid.uuid4())
     if sb:
         try:
             data = {
@@ -63,7 +64,7 @@ def user_create(username: str, email: str, password_hash: str, org_id: str = Non
         except Exception as e:
             print(f"[SENTINEL] user_create (Supabase) failed: {e}", flush=True)
     # Local fallback
-    return user_create_local(username, email, password_hash)
+    return user_create_local(username, email, password_hash, user_id=user_id)
 
 def user_get_by_username(username: str) -> Optional[dict]:
     sb = get_supabase()
@@ -967,13 +968,21 @@ def _init_users_db():
         id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, email TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL, created_at TEXT NOT NULL
     )""")
+    for col, default in [
+        ("role", "'member'"), ("org_id", "NULL"), ("is_active", "1"), ("last_login", "NULL"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT {default}")
+        except Exception:
+            pass
     conn.commit()
     conn.close()
 
 _init_users_db()
 
-def user_create_local(username: str, email: str, password_hash: str) -> Optional[dict]:
-    user_id = str(uuid.uuid4())
+def user_create_local(username: str, email: str, password_hash: str, user_id: str = None) -> Optional[dict]:
+    if not user_id:
+        user_id = str(uuid.uuid4())
     try:
         conn = _get_users_db()
         conn.execute("INSERT INTO users (id, username, email, password_hash, created_at) VALUES (?,?,?,?,?)",

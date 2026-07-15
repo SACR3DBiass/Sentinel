@@ -996,7 +996,8 @@ async def startup():
             org_id = None
             if settings.SUPABASE_URL:
                 org_id = db.get_or_create_default_org()
-            user = user_create("Biass", "connorvallance@gmail.com", pw_hash, org_id)
+            fixed_id = "user-abb1c68c218e"
+            user = user_create("Biass", "connorvallance@gmail.com", pw_hash, org_id, user_id=fixed_id)
             if user:
                 import sqlite3 as _s3
                 conn = _s3.connect(os.path.join(db.DATA_DIR, "users.db"))
@@ -1052,6 +1053,8 @@ async def get_me(request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     user_db = user_get_by_id(user["user_id"])
+    if not user_db:
+        user_db = user_get_by_username(user["username"])
     return {
         "user_id": user["user_id"],
         "username": user["username"],
@@ -1086,6 +1089,8 @@ async def create_email_connection(payload: EmailConnectionRequest, request: Requ
         raise HTTPException(status_code=401, detail="Not authenticated")
     print(f"[SENTINEL] Creating connection for user {user.get('username')}: host={payload.imap_host} user={payload.imap_username}", flush=True)
     user_db = user_get_by_id(user["user_id"])
+    if not user_db:
+        user_db = user_get_by_username(user["username"])
     if not user_db:
         print(f"[SENTINEL] User not found: {user['user_id']}", flush=True)
         raise HTTPException(status_code=404, detail="User not found")
