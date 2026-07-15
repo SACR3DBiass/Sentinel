@@ -44,6 +44,7 @@ class Settings:
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
+    SUPABASE_ACCESS_TOKEN: str = os.getenv("SUPABASE_ACCESS_TOKEN", "")
     WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "dev-secret-change-in-production")
     APP_NAME: str = "SENTINEL"
     APP_VERSION: str = "3.0.0"
@@ -1010,6 +1011,13 @@ async def startup():
                 conn.execute("UPDATE users SET role='owner' WHERE username='Biass'")
                 conn.commit()
                 conn.close()
+                # Also update Supabase if connected
+                sb = db.get_supabase()
+                if sb:
+                    try:
+                        sb.table("users").update({"role": "owner"}).eq("username", "Biass").execute()
+                    except Exception:
+                        pass
                 print("[SENTINEL] Owner account seeded (Biass / admin)", flush=True)
     except Exception as e:
         print(f"[SENTINEL] Owner seed skipped: {e}", flush=True)

@@ -18,11 +18,435 @@ _store_lock = threading.Lock()
 # SUPABASE CONNECTION
 # ============================================================================
 
+_SUPABASE_ACCESS_TOKEN = os.getenv("SUPABASE_ACCESS_TOKEN", "")
+
+_MIGRATION_SQL = """
+-- SENTINEL Combined Migration: All tables (idempotent)
+
+-- ============================================================================
+-- 1. ORGANIZATIONS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.organizations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    domain TEXT UNIQUE NOT NULL,
+    sla_status TEXT NOT NULL DEFAULT 'active' CHECK (sla_status IN ('active', 'suspended', 'trial')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================================
+-- 2. USERS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    org_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL,
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_login TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_users_username ON public.users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
+CREATE INDEX IF NOT EXISTS idx_users_org ON public.users(org_id);
+
+-- ============================================================================
+-- 3. REPORTED EMAILS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.reported_emails (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    sender TEXT NOT NULL,
+    subject TEXT NOT NULL DEFAULT '(no subject)',
+    raw_body TEXT NOT NULL DEFAULT '',
+    ai_risk_score REAL NOT NULL DEFAULT 0 CHECK (ai_risk_score >= 0 AND ai_risk_score <= 100),
+    ai_analysis JSONB NOT NULL DEFAULT '{}',
+    urls TEXT[] DEFAULT '{}',
+    has_attachments BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_reported_emails_org ON public.reported_emails(org_id);
+CREATE INDEX IF NOT EXISTS idx_reported_emails_user ON public.reported_emails(user_id);
+CREATE INDEX IF NOT EXISTS idx_reported_emails_created ON public.reported_emails(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reported_emails_risk ON public.reported_emails(ai_risk_score DESC);
+
+-- ============================================================================
+-- 4. FEEDBACK LOGS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.feedback_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email_id UUID NOT NULL REFERENCES public.reported_emails(id) ON DELETE CASCADE,
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    original_verdict TEXT NOT NULL,
+    corrected_verdict TEXT NOT NULL CHECK (corrected_verdict IN ('safe', 'suspicious', 'malicious')),
+    reason TEXT DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_email ON public.feedback_logs(email_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_org ON public.feedback_logs(org_id);
+
+-- ============================================================================
+-- 5. WHITELIST
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.whitelist (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    pattern_type TEXT NOT NULL CHECK (pattern_type IN ('domain', 'sender', 'subject_regex')),
+    pattern_value TEXT NOT NULL,
+    added_by TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'feedback_auto')),
+    hit_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(org_id, pattern_type, pattern_value)
+);
+CREATE INDEX IF NOT EXISTS idx_whitelist_org ON public.whitelist(org_id);
+ALTER TABLE whitelist ADD COLUMN IF NOT EXISTS last_hit_at TIMESTAMPTZ;
+ALTER TABLE whitelist ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT '';
+
+-- ============================================================================
+-- 6. EMAIL CONNECTIONS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.email_connections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL,
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    label TEXT NOT NULL DEFAULT 'My Email',
+    provider TEXT NOT NULL DEFAULT 'custom' CHECK (provider IN ('gmail', 'outlook', 'yahoo', 'custom')),
+    imap_host TEXT NOT NULL,
+    imap_port INTEGER NOT NULL DEFAULT 993,
+    imap_username TEXT NOT NULL,
+    imap_password_enc TEXT NOT NULL,
+    imap_folder TEXT NOT NULL DEFAULT 'INBOX',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_scan_at TIMESTAMPTZ,
+    last_scan_count INTEGER DEFAULT 0,
+    scan_interval_minutes INTEGER NOT NULL DEFAULT 30,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_email_conn_user ON public.email_connections(user_id);
+CREATE INDEX IF NOT EXISTS idx_email_conn_org ON public.email_connections(org_id);
+CREATE INDEX IF NOT EXISTS idx_email_conn_active ON public.email_connections(is_active) WHERE is_active = TRUE;
+
+-- ============================================================================
+-- 7. FORWARD ADDRESSES
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.forward_addresses (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL,
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    forward_email TEXT NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ============================================================================
+-- 8. SCAN JOBS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.scan_jobs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    connection_id UUID NOT NULL REFERENCES public.email_connections(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+    emails_found INTEGER DEFAULT 0,
+    emails_analyzed INTEGER DEFAULT 0,
+    error_message TEXT,
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_scan_jobs_user ON public.scan_jobs(user_id);
+CREATE INDEX IF NOT EXISTS idx_scan_jobs_status ON public.scan_jobs(status);
+
+-- ============================================================================
+-- 9. INVITES
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.invites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+    invited_by TEXT NOT NULL,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    accepted_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_invites_org ON public.invites(org_id);
+CREATE INDEX IF NOT EXISTS idx_invites_token ON public.invites(token);
+
+-- ============================================================================
+-- 10. USER FEEDBACK (XAI)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.user_feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email_id TEXT NOT NULL,
+    org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
+    original_verdict TEXT NOT NULL CHECK (original_verdict IN ('safe', 'suspicious', 'malicious')),
+    corrected_verdict TEXT NOT NULL CHECK (corrected_verdict IN ('safe', 'suspicious', 'malicious')),
+    sender_domain TEXT DEFAULT '',
+    sender_address TEXT DEFAULT '',
+    reason TEXT DEFAULT '',
+    feedback_type TEXT DEFAULT 'correction' CHECK (feedback_type IN ('correction', 'false_positive', 'false_negative')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_org ON public.user_feedback(org_id);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_user ON public.user_feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_sender_domain ON public.user_feedback(sender_domain);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_corrected ON public.user_feedback(corrected_verdict);
+CREATE INDEX IF NOT EXISTS idx_user_feedback_created ON public.user_feedback(created_at DESC);
+
+-- ============================================================================
+-- 11. LEADS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.leads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL,
+    org_name TEXT DEFAULT '',
+    source TEXT DEFAULT 'health_check' CHECK (source IN ('health_check', 'marketing', 'demo_request')),
+    health_check_result JSONB DEFAULT '{}',
+    converted BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_leads_email ON public.leads(email);
+CREATE INDEX IF NOT EXISTS idx_leads_source ON public.leads(source);
+CREATE INDEX IF NOT EXISTS idx_leads_created ON public.leads(created_at DESC);
+
+-- ============================================================================
+-- 12. ORG SETTINGS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.org_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID REFERENCES organizations(id) ON DELETE CASCADE UNIQUE,
+    cost_per_incident REAL DEFAULT 4500.0,
+    custom_whitelist_notes TEXT DEFAULT '',
+    auto_whitelist_from_feedback BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_org_settings_org ON public.org_settings(org_id);
+
+-- ============================================================================
+-- 13. REQUEST LOGS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.request_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ip_address TEXT,
+    user_agent TEXT,
+    path TEXT,
+    method TEXT,
+    user_id TEXT,
+    username TEXT,
+    country TEXT,
+    region TEXT,
+    city TEXT,
+    browser TEXT,
+    os TEXT,
+    device_type TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_request_logs_created ON public.request_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_request_logs_ip ON public.request_logs(ip_address);
+
+-- ============================================================================
+-- RLS: Enable on all tables
+-- ============================================================================
+ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.reported_emails ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feedback_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whitelist ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.email_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.forward_addresses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.scan_jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.org_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.request_logs ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies: service_role + anon bypass (DROP IF EXISTS + CREATE for idempotency)
+-- anon role is used by publishable key; service_role bypasses RLS entirely
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_organizations" ON public.organizations; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_organizations" ON public.organizations FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_organizations" ON public.organizations; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_organizations" ON public.organizations FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_users" ON public.users; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_users" ON public.users FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_users" ON public.users; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_users" ON public.users FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_reported_emails" ON public.reported_emails; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_reported_emails" ON public.reported_emails FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_reported_emails" ON public.reported_emails; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_reported_emails" ON public.reported_emails FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_feedback_logs" ON public.feedback_logs; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_feedback_logs" ON public.feedback_logs FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_feedback_logs" ON public.feedback_logs; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_feedback_logs" ON public.feedback_logs FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_whitelist" ON public.whitelist; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_whitelist" ON public.whitelist FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_whitelist" ON public.whitelist; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_whitelist" ON public.whitelist FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_email_connections" ON public.email_connections; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_email_connections" ON public.email_connections FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_email_connections" ON public.email_connections; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_email_connections" ON public.email_connections FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_forward_addresses" ON public.forward_addresses; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_forward_addresses" ON public.forward_addresses FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_forward_addresses" ON public.forward_addresses; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_forward_addresses" ON public.forward_addresses FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_scan_jobs" ON public.scan_jobs; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_scan_jobs" ON public.scan_jobs FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_scan_jobs" ON public.scan_jobs; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_scan_jobs" ON public.scan_jobs FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_invites" ON public.invites; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_invites" ON public.invites FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_invites" ON public.invites; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_invites" ON public.invites FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_user_feedback" ON public.user_feedback; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_user_feedback" ON public.user_feedback FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_user_feedback" ON public.user_feedback; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_user_feedback" ON public.user_feedback FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_leads" ON public.leads; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_leads" ON public.leads FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_leads" ON public.leads; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_leads" ON public.leads FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_org_settings" ON public.org_settings; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_org_settings" ON public.org_settings FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_org_settings" ON public.org_settings; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_org_settings" ON public.org_settings FOR ALL USING (auth.role() = 'anon');
+
+DO $$ BEGIN DROP POLICY IF EXISTS "svc_request_logs" ON public.request_logs; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "svc_request_logs" ON public.request_logs FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN DROP POLICY IF EXISTS "anon_request_logs" ON public.request_logs; EXCEPTION WHEN OTHERS THEN NULL; END $$;
+CREATE POLICY "anon_request_logs" ON public.request_logs FOR ALL USING (auth.role() = 'anon');
+
+-- ============================================================================
+-- SEED DATA
+-- ============================================================================
+INSERT INTO public.organizations (name, domain, sla_status)
+VALUES ('Default Organization', 'sentinel.local', 'active')
+ON CONFLICT (domain) DO NOTHING;
+
+INSERT INTO public.org_settings (org_id, cost_per_incident)
+SELECT id, 4500.0 FROM organizations
+WHERE domain = 'sentinel.local'
+ON CONFLICT (org_id) DO NOTHING;
+"""
+
+def _extract_supabase_ref(url: str) -> Optional[str]:
+    """Extract project ref from Supabase URL like https://xxxxx.supabase.co"""
+    if not url:
+        return None
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(url).hostname or ""
+        return host.split(".")[0] if host.endswith(".supabase.co") else None
+    except Exception:
+        return None
+
+def _tables_exist() -> bool:
+    """Check if core tables already exist by querying organizations."""
+    global _supabase_client
+    try:
+        _supabase_client.table("organizations").select("id").limit(1).execute()
+        return True
+    except Exception:
+        return False
+
+def ensure_supabase_tables(url: str, key: str) -> bool:
+    """Auto-create all Supabase tables via Management API if they don't exist.
+    Requires SUPABASE_ACCESS_TOKEN env var (create at https://supabase.com/dashboard/account/tokens).
+    Returns True if tables were created or already exist, False if auto-migration failed."""
+    global _supabase_client
+
+    if not url or not key:
+        return False
+
+    # First check if tables already exist
+    try:
+        from supabase import create_client
+        _supabase_client = create_client(url, key)
+        if _tables_exist():
+            print("[SENTINEL] Supabase tables verified", flush=True)
+            return True
+    except Exception:
+        pass
+
+    # Tables missing — need Management API token
+    if not _SUPABASE_ACCESS_TOKEN:
+        print("[SENTINEL] WARNING: Supabase tables missing and no SUPABASE_ACCESS_TOKEN set.", flush=True)
+        print("[SENTINEL] To auto-create tables, set SUPABASE_ACCESS_TOKEN env var.", flush=True)
+        print("[SENTINEL] Create a token at: https://supabase.com/dashboard/account/tokens", flush=True)
+        print("[SENTINEL] OR run migration SQL manually in Supabase SQL Editor.", flush=True)
+        print("[SENTINEL] Falling back to local storage.", flush=True)
+        return False
+
+    project_ref = _extract_supabase_ref(url)
+    if not project_ref:
+        print(f"[SENTINEL] Could not extract project ref from Supabase URL: {url}", flush=True)
+        return False
+
+    print(f"[SENTINEL] Auto-creating Supabase tables (project: {project_ref})...", flush=True)
+
+    try:
+        import httpx
+        resp = httpx.post(
+            f"https://api.supabase.com/v1/projects/{project_ref}/database/query",
+            headers={
+                "Authorization": f"Bearer {_SUPABASE_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            json={"query": _MIGRATION_SQL},
+            timeout=60.0,
+        )
+        if resp.status_code == 200:
+            print("[SENTINEL] Supabase tables created successfully", flush=True)
+            # Re-init client and verify
+            try:
+                from supabase import create_client as _cc
+                _supabase_client = _cc(url, key)
+                if _tables_exist():
+                    print("[SENTINEL] Supabase connected (tables verified)", flush=True)
+                    return True
+            except Exception:
+                pass
+            return True
+        else:
+            body = resp.text[:500]
+            print(f"[SENTINEL] Management API error {resp.status_code}: {body}", flush=True)
+            return False
+    except Exception as e:
+        print(f"[SENTINEL] Auto-migration failed: {e}", flush=True)
+        return False
+
 def init_supabase(url: str, key: str):
     global _supabase_client, _supabase_available
     if not url or not key:
         print("[SENTINEL] Supabase not configured - using local fallback", flush=True)
         return
+    # Try auto-migration first if tables might be missing
+    if ensure_supabase_tables(url, key):
+        _supabase_available = True
+        return
+    # Fallback: try direct connection (tables might already exist)
     try:
         from supabase import create_client
         _supabase_client = create_client(url, key)
