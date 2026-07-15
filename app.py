@@ -988,6 +988,24 @@ async def startup():
     print(f"[SENTINEL] Server starting - Groq API: {'configured' if settings.GROQ_API_KEY else 'NOT configured'}", flush=True)
     # Initialize Supabase connection
     db.init_supabase(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+    # Seed owner account if it doesn't exist
+    try:
+        existing = user_get_by_username("Biass")
+        if not existing:
+            pw_hash = hash_password("admin")
+            org_id = None
+            if settings.SUPABASE_URL:
+                org_id = db.get_or_create_default_org()
+            user = user_create("Biass", "connorvallance@gmail.com", pw_hash, org_id)
+            if user:
+                import sqlite3 as _s3
+                conn = _s3.connect(os.path.join(db.DATA_DIR, "users.db"))
+                conn.execute("UPDATE users SET role='owner' WHERE username='Biass'")
+                conn.commit()
+                conn.close()
+                print("[SENTINEL] Owner account seeded (Biass / admin)", flush=True)
+    except Exception as e:
+        print(f"[SENTINEL] Owner seed skipped: {e}", flush=True)
     print(f"[SENTINEL] Dashboard: http://localhost:8000/dashboard", flush=True)
     if imap_service.is_configured:
         asyncio.create_task(poll_imap_background())
