@@ -2168,14 +2168,14 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
         .btn:hover { border-color: #555; background: #1e1e1e; }
         .btn.primary { background: linear-gradient(135deg, #DC2626, #991B1B); border: 1px solid rgba(220,38,38,0.3); }
         .btn.primary:hover { box-shadow: 0 4px 20px rgba(220,38,38,0.3); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .stat-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; }
-        .stat-card .label { font-size: 12px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-        .stat-card .value { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; font-family: 'JetBrains Mono', monospace; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 14px 16px; }
+        .stat-card .label { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .stat-card .value { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; font-family: 'JetBrains Mono', monospace; }
         .stat-card .value.red { color: #DC2626; }
-        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .chart-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; }
-        .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .chart-card { background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px; margin-bottom: 0; }
+        .chart-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
         .chart-card canvas { width: 100% !important; }
         .table-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; margin-bottom: 24px; overflow-x: auto; }
         .table-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
@@ -2199,10 +2199,27 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
         .empty-state p { color: #888; font-size: 14px; margin-bottom: 20px; }
         .live-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .hamburger { display: none; background: none; border: none; color: #f5f5f5; font-size: 22px; cursor: pointer; padding: 6px; line-height: 1; -webkit-tap-highlight-color: transparent; }
         @media (max-width: 768px) {
-            .main { padding: 72px 16px 16px; }
-            .chart-grid { grid-template-columns: 1fr; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .main { padding: 72px 12px 12px; }
+            .topbar { padding: 10px 12px; }
+            .hamburger { display: block; }
+            .nav { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #111; border-bottom: 1px solid #1a1a1a; padding: 8px 12px; flex-direction: column; gap: 4px; z-index: 99; }
+            .nav.open { display: flex; }
+            .page-header h1 { font-size: 22px; }
+            .controls { flex-direction: column; align-items: stretch; gap: 8px; }
+            .controls select, .controls input { width: 100%; }
+            .controls span { margin-left: 0 !important; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .stat-card { padding: 10px 12px; }
+            .stat-card .value { font-size: 18px; }
+            .chart-grid { grid-template-columns: 1fr; gap: 8px; }
+            .chart-card { padding: 12px; }
+            .chart-card h3 { font-size: 12px; }
+            .table-card { padding: 12px; overflow-x: auto; }
+            table { font-size: 11px; }
+            th, td { padding: 6px 8px; white-space: nowrap; }
+            .bar-label { width: 70px; font-size: 10px; }
         }
     </style>
 </head>
@@ -2220,6 +2237,7 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
             </div>
         </div>
         <div class="topbar-right">
+            <button class="hamburger" onclick="document.querySelector('.nav').classList.toggle('open')">&#9776;</button>
             <a href="/dashboard" class="btn">Dashboard</a>
             <a href="/login" class="btn" onclick="event.preventDefault(); logout()">Logout</a>
         </div>
@@ -2227,7 +2245,7 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
 
     <div class="main">
         <div class="page-header">
-            <h1>Site Analytics</h1>
+            <h1>Analytics Dashboard</h1>
             <p>Track visitor regions, activity times, and device usage</p>
         </div>
 
@@ -2256,6 +2274,7 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
                     <canvas id="senderChart" height="200"></canvas>
                 </div>
             </div>
+            <div id="siteAnalyticsSection">
             <h2 style="font-size:20px;font-weight:700;margin:20px 0 12px;color:#C084FC;">Site Analytics</h2>
             <div class="stats-grid" id="statsGrid"></div>
             <div class="chart-grid">
@@ -2296,6 +2315,7 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
                     <thead><tr><th>IP Address</th><th>Country</th><th>City</th><th>Device</th><th>Browser</th><th>OS</th><th>Requests</th><th>First Seen</th></tr></thead>
                     <tbody id="ipBody"></tbody>
                 </table>
+            </div>
             </div>
         </div>
     </div>
@@ -2445,6 +2465,19 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
         window.location.href = '/login';
     }
 
+    async function checkRole() {
+        try {
+            var r = await fetch('/api/auth/me', { headers: authHeaders() });
+            var data = await r.json();
+            if (data.role !== 'owner') {
+                document.getElementById('siteAnalyticsSection').style.display = 'none';
+            }
+        } catch(e) {
+            document.getElementById('siteAnalyticsSection').style.display = 'none';
+        }
+    }
+
+    checkRole();
     loadAnalytics();
     setInterval(loadAnalytics, 60000);
     </script>
@@ -2545,6 +2578,34 @@ LANDING_PAGE = """<!DOCTYPE html>
         .delay-2 { animation-delay: 0.2s; }
         .delay-3 { animation-delay: 0.3s; }
         .delay-4 { animation-delay: 0.4s; }
+        @media (max-width: 768px) {
+            .nav { padding: 12px 16px; }
+            .nav-links { gap: 6px; }
+            .nav-links a { padding: 6px 10px; font-size: 12px; }
+            .btn-primary { padding: 8px 16px; font-size: 13px; }
+            .hero { padding: 100px 20px 60px; }
+            .hero h1 { font-size: 36px; }
+            .hero p { font-size: 15px; }
+            .hero-buttons { flex-direction: column; align-items: center; }
+            .hero-buttons .btn-primary, .hero-buttons .btn-outline { padding: 12px 28px; font-size: 14px; width: 100%; max-width: 280px; }
+            .trust-bar-inner { gap: 20px; }
+            .trust-item { font-size: 10px; }
+            .features { padding: 60px 16px; }
+            .features h2 { font-size: 24px; margin-bottom: 32px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .feature-card { padding: 24px; }
+            .stats-section { padding: 40px 16px; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+            .stat-value { font-size: 28px; }
+            .how-it-works { padding: 60px 16px; }
+            .how-it-works h2 { font-size: 24px; margin-bottom: 40px; }
+            .steps { grid-template-columns: 1fr; gap: 24px; }
+            .steps::before { display: none; }
+            .cta { padding: 60px 16px; }
+            .cta-box { padding: 40px 24px; }
+            .cta-box h2 { font-size: 22px; }
+            .cta-badges { flex-direction: column; align-items: center; gap: 8px; }
+        }
     </style>
 </head>
 <body>
@@ -2949,6 +3010,20 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
         .s2 { animation-delay: 0.1s; }
         .s3 { animation-delay: 0.15s; }
         .s4 { animation-delay: 0.2s; }
+        .d-hamburger { display: none; background: none; border: none; color: #f5f5f5; font-size: 22px; cursor: pointer; padding: 6px; line-height: 1; }
+        @media (max-width: 768px) {
+            .d-hamburger { display: flex !important; }
+            .d-nav { display: none !important; }
+            .d-nav.open { display: flex !important; flex-direction: column; position: absolute; top: 64px; left: 0; right: 0; background: #111; border-bottom: 1px solid #1a1a1a; padding: 8px 12px; gap: 6px; z-index: 99; }
+            .d-stats { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+            .d-filters { flex-wrap: wrap !important; }
+            .d-wrap { padding: 0 12px !important; }
+            .d-main { padding: 24px 12px !important; }
+            .d-stat-val { font-size: 24px !important; }
+            .d-modal { max-width: calc(100vw - 16px) !important; margin: 8px !important; max-height: 95vh !important; border-radius: 12px !important; }
+            .d-team-stats { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+            .d-member-row { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+        }
     </style>
 </head>
 <body>
@@ -3062,6 +3137,8 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
             var inviteEmail = _inviteEmail[0], setInviteEmail = _inviteEmail[1];
             var _userRole = useState('');
             var userRole = _userRole[0], setUserRole = _userRole[1];
+            var _menuOpen = useState(false);
+            var menuOpen = _menuOpen[0], setMenuOpen = _menuOpen[1];
 
             var addToast = useCallback(function(type, message) {
                 var id = ++toastId.current;
@@ -3208,18 +3285,19 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
 
             return React.createElement('div', { style:{minHeight:'100vh',background:'var(--bg)'} },
                 React.createElement('header', { style:st.header },
-                    React.createElement('div', { style:st.wrap },
+                    React.createElement('div', { className:'d-wrap', style:st.wrap },
                         React.createElement('div', { style:st.logo },
                             React.createElement('div', { style:st.logoM, dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="35"><path d="M20 2L4 10v12c0 11 7.2 21.3 16 24 8.8-2.7 16-13 16-24V10L20 2z" fill="url(#lg3)" stroke="#991B1B" stroke-width="1.5"/><path d="M20 10v8m0 0v8m0-8l-4-4m4 4l4-4" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="lg3" x1="4" y1="2" x2="36" y2="46"><stop stop-color="#DC2626"/><stop offset="1" stop-color="#7F1D1D"/></linearGradient></defs></svg>'} }),
                             React.createElement('div', null,
                                 React.createElement('div', { style:{fontSize:16,fontWeight:800,letterSpacing:'-0.02em'} }, 'SENTINEL'),
                                 React.createElement('div', { style:{fontSize:10,color:'#666',letterSpacing:'0.05em',textTransform:'uppercase'} }, 'Phishing Triage')
-                            )
-                        ),
-                        React.createElement('div', { style:{display:'flex',gap:10,alignItems:'center',flexWrap:'nowrap',overflow:'hidden',minHeight:40} },
+                        )
+                    ),
+                    React.createElement('button', { className:'d-hamburger', onClick:function() { setMenuOpen(!menuOpen); } }, '\u2630'),
+                    React.createElement('div', { className:'d-nav' + (menuOpen ? ' open' : ''), style:{display:'flex',gap:10,alignItems:'center',flexWrap:'nowrap',overflow:'hidden',minHeight:40} },
                             React.createElement('span', { style:{fontSize:12,color:'#666',marginRight:8} }, username),
-                            React.createElement('button', { onClick:function() { setView('dashboard'); }, style:Object.assign({}, btnDark, { background:view==='dashboard'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='dashboard'?'rgba(220,38,38,0.4)':'#282828', color:view==='dashboard'?'#EF4444':'#a0a0a0' }) }, 'Dashboard'),
-                            React.createElement('button', { onClick:function() { setView('team'); fetchTeam(); }, style:Object.assign({}, btnDark, { background:view==='team'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='team'?'rgba(220,38,38,0.4)':'#282828', color:view==='team'?'#EF4444':'#a0a0a0' }) }, 'Team'),
+                            React.createElement('button', { onClick:function() { setView('dashboard'); setMenuOpen(false); }, style:Object.assign({}, btnDark, { background:view==='dashboard'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='dashboard'?'rgba(220,38,38,0.4)':'#282828', color:view==='dashboard'?'#EF4444':'#a0a0a0' }) }, 'Dashboard'),
+                            React.createElement('button', { onClick:function() { setView('team'); fetchTeam(); setMenuOpen(false); }, style:Object.assign({}, btnDark, { background:view==='team'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='team'?'rgba(220,38,38,0.4)':'#282828', color:view==='team'?'#EF4444':'#a0a0a0' }) }, 'Team'),
                             React.createElement('button', { onClick:function() { window.location.href='/settings'; }, style:btnDark }, 'Settings'),
                             React.createElement('button', { onClick:function() { window.location.href='/analytics'; }, style:Object.assign({}, btnDark, {borderColor:'rgba(168,85,247,0.3)',color:'#C084FC'}) }, 'Analytics'),
                             React.createElement('button', { onClick:function() { setShowPaste(true); }, style:btnDark }, 'Paste Email'),
@@ -3239,15 +3317,15 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                         )
                     )
                 ),
-                React.createElement('main', { style:st.main },
+                React.createElement('main', { className:'d-main', style:st.main },
                     view === 'dashboard' ? React.createElement(React.Fragment, null,
-                    React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16,marginBottom:32} },
-                        React.createElement('div', { className:'anim-fade-up s1', style:statC }, React.createElement('div', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em'} }, 'Total Analyzed'), React.createElement('div', { style:{fontSize:32,fontWeight:800,marginTop:4} }, total)),
-                        React.createElement('div', { className:'anim-fade-up s2', style:statC }, React.createElement('div', { style:{fontSize:11,fontWeight:600,color:'#EF4444',textTransform:'uppercase',letterSpacing:'0.05em'} }, 'Threats Blocked'), React.createElement('div', { style:{fontSize:32,fontWeight:800,marginTop:4,color:'#EF4444'} }, malicious)),
-                        React.createElement('div', { className:'anim-fade-up s3', style:statC }, React.createElement('div', { style:{fontSize:11,fontWeight:600,color:'#EAB308',textTransform:'uppercase',letterSpacing:'0.05em'} }, 'Suspicious'), React.createElement('div', { style:{fontSize:32,fontWeight:800,marginTop:4,color:'#EAB308'} }, suspicious)),
-                        React.createElement('div', { className:'anim-fade-up s4', style:statC }, React.createElement('div', { style:{fontSize:11,fontWeight:600,color:'#22C55E',textTransform:'uppercase',letterSpacing:'0.05em'} }, 'Safe'), React.createElement('div', { style:{fontSize:32,fontWeight:800,marginTop:4,color:'#22C55E'} }, safe))
+                    React.createElement('div', { className:'d-stats', style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16,marginBottom:32} },
+                        React.createElement('div', { className:'anim-fade-up s1', style:statC }, React.createElement('div', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em'} }, 'Total Analyzed'), React.createElement('div', { className:'d-stat-val', style:{fontSize:32,fontWeight:800,marginTop:4} }, total)),
+                        React.createElement('div', { className:'anim-fade-up s2', style:statC }, React.createElement('div', { style:{fontSize:11,fontWeight:600,color:'#EF4444',textTransform:'uppercase',letterSpacing:'0.05em'} }, 'Threats Blocked'), React.createElement('div', { className:'d-stat-val', style:{fontSize:32,fontWeight:800,marginTop:4,color:'#EF4444'} }, malicious)),
+                        React.createElement('div', { className:'anim-fade-up s3', style:statC }, React.createElement('div', { style:{fontSize:11,fontWeight:600,color:'#EAB308',textTransform:'uppercase',letterSpacing:'0.05em'} }, 'Suspicious'), React.createElement('div', { className:'d-stat-val', style:{fontSize:32,fontWeight:800,marginTop:4,color:'#EAB308'} }, suspicious)),
+                        React.createElement('div', { className:'anim-fade-up s4', style:statC }, React.createElement('div', { style:{fontSize:11,fontWeight:600,color:'#22C55E',textTransform:'uppercase',letterSpacing:'0.05em'} }, 'Safe'), React.createElement('div', { className:'d-stat-val', style:{fontSize:32,fontWeight:800,marginTop:4,color:'#22C55E'} }, safe))
                     ),
-                    React.createElement('div', { style:{display:'flex',gap:8,marginBottom:24} },
+                    React.createElement('div', { className:'d-filters', style:{display:'flex',gap:8,marginBottom:24} },
                         ['all','malicious','suspicious','safe'].map(function(f) {
                             var labels = {all:'All Reports',malicious:'Threats',suspicious:'Suspicious',safe:'Safe'};
                             var counts = {all:total, malicious:malicious, suspicious:suspicious, safe:safe};
@@ -3341,7 +3419,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                                 React.createElement('div', { style:{fontSize:18,fontWeight:800,color:'#a0a0a0',marginBottom:8} }, 'No Team Members'),
                                 React.createElement('div', { style:{fontSize:13,color:'#666',maxWidth:380,margin:'0 auto 20px',lineHeight:1.6} }, 'Invite team members from Settings to monitor their email security.')
                             ) : React.createElement('div', null,
-                                React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:24} },
+                                React.createElement('div', { className:'d-team-stats', style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:24} },
                                     React.createElement('div', { className:'anim-fade-up s1', style:statC },
                                         React.createElement('div', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em'} }, 'Team Members'),
                                         React.createElement('div', { style:{fontSize:28,fontWeight:800,marginTop:4} }, teamData.length)
@@ -3364,7 +3442,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                                     var borderCol = hasThreats ? 'rgba(220,38,38,0.3)' : m.suspicious > 0 ? 'rgba(234,179,8,0.2)' : '#1a1a1a';
                                     var bgCol = hasThreats ? 'rgba(220,38,38,0.04)' : 'linear-gradient(145deg, #161616, #131313)';
                                     return React.createElement('div', { key:m.user_id, onClick:function() { fetchMemberEmails(m.user_id); }, className:'anim-fade-up', style:{background:bgCol,border:'1px solid '+borderCol,borderRadius:14,padding:'18px 22px',cursor:'pointer',transition:'all 0.2s',marginBottom:10,animationDelay:Math.min(i*0.05,0.3)+'s'} },
-                                        React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center'} },
+                                        React.createElement('div', { className:'d-member-row', style:{display:'flex',justifyContent:'space-between',alignItems:'center'} },
                                             React.createElement('div', { style:{display:'flex',alignItems:'center',gap:12} },
                                                 React.createElement('div', { style:{width:42,height:42,borderRadius:10,background:hasThreats?'linear-gradient(135deg,#DC2626,#991B1B)':'linear-gradient(135deg,#22C55E,#166534)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:800,color:'#fff',flexShrink:0} }, m.username.charAt(0).toUpperCase()),
                                                 React.createElement('div', null,
@@ -3392,7 +3470,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                     )
                 ),
                 selected ? React.createElement('div', { onClick:function() { setSelected(null); }, style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:100,animation:'fadeIn 0.15s ease-out'} },
-                    React.createElement('div', { className:'anim-modal', onClick:function(e) { e.stopPropagation(); }, style:{background:'#161616',border:'1px solid #1a1a1a',borderRadius:16,width:'100%',maxWidth:720,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 25px 60px rgba(0,0,0,0.5)'} },
+                    React.createElement('div', { className:'anim-modal d-modal', onClick:function(e) { e.stopPropagation(); }, style:{background:'#161616',border:'1px solid #1a1a1a',borderRadius:16,width:'100%',maxWidth:720,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 25px 60px rgba(0,0,0,0.5)'} },
                         React.createElement('div', { style:{padding:'20px 24px',borderBottom:'1px solid #1a1a1a',display:'flex',justifyContent:'space-between',alignItems:'flex-start'} },
                             React.createElement('div', { style:{flex:1,paddingRight:16} },
                                 React.createElement('div', { style:{fontSize:20,fontWeight:800,marginBottom:4} }, selected.subject),
@@ -3573,6 +3651,18 @@ SETTINGS_PAGE = """<!DOCTYPE html>
         @keyframes modalIn { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes toastIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+        .s-hamburger { display: none; background: none; border: none; color: #f5f5f5; font-size: 22px; cursor: pointer; padding: 6px; line-height: 1; }
+        @media (max-width: 768px) {
+            .s-hamburger { display: flex !important; }
+            .s-nav { display: none !important; }
+            .s-nav.open { display: flex !important; flex-direction: column; position: absolute; top: 64px; left: 0; right: 0; background: #111; border-bottom: 1px solid #1a1a1a; padding: 8px 12px; gap: 6px; z-index: 99; }
+            .s-wrap { padding: 0 12px !important; }
+            .s-main { padding: 24px 12px !important; }
+            .s-tabs { flex-wrap: wrap !important; gap: 6px !important; }
+            .s-card-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
+            .s-invite-row { flex-direction: column !important; }
+            .s-modal { max-width: calc(100vw - 16px) !important; margin: 8px !important; }
+        }
     </style>
 </head>
 <body>
@@ -3654,19 +3744,20 @@ SETTINGS_PAGE = """<!DOCTYPE html>
 
             return React.createElement('div', { style:{minHeight:'100vh'} },
                 React.createElement('header', { style:{background:'rgba(17,17,17,0.9)',backdropFilter:'blur(20px)',borderBottom:'1px solid #1a1a1a',position:'sticky',top:0,zIndex:50} },
-                    React.createElement('div', { style:{maxWidth:1000,margin:'0 auto',padding:'0 24px',display:'flex',alignItems:'center',justifyContent:'space-between',height:64} },
+                    React.createElement('div', { className:'s-wrap', style:{maxWidth:1000,margin:'0 auto',padding:'0 24px',display:'flex',alignItems:'center',justifyContent:'space-between',height:64} },
                         React.createElement('div', { style:{display:'flex',alignItems:'center',gap:10} },
                             React.createElement('div', { dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="31"><path d="M20 2L4 10v12c0 11 7.2 21.3 16 24 8.8-2.7 16-13 16-24V10L20 2z" fill="url(#lgS)" stroke="#991B1B" stroke-width="1.5"/><path d="M20 10v8m0 0v8m0-8l-4-4m4 4l4-4" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="lgS" x1="4" y1="2" x2="36" y2="46"><stop stop-color="#DC2626"/><stop offset="1" stop-color="#7F1D1D"/></linearGradient></defs></svg>'} }),
                             React.createElement('span', { style:{fontSize:16,fontWeight:800} }, 'Settings')
                         ),
-                        React.createElement('div', { style:{display:'flex',gap:8,alignItems:'center'} },
+                        React.createElement('button', { className:'s-hamburger', onClick:function() { document.querySelector('.s-nav').classList.toggle('open'); } }, '\u2630'),
+                        React.createElement('div', { className:'s-nav', style:{display:'flex',gap:8,alignItems:'center'} },
                             React.createElement('button', { onClick:function() { window.location.href='/dashboard'; }, style:btnDark }, 'Back to Dashboard'),
                             React.createElement('button', { onClick:logout, style:Object.assign({}, btnBase, {background:'transparent',color:'#666',border:'1px solid #222'}) }, 'Logout')
                         )
                     )
                 ),
-                React.createElement('main', { style:{maxWidth:1000,margin:'0 auto',padding:'32px 24px'} },
-                    React.createElement('div', { style:{display:'flex',gap:8,marginBottom:32} },
+                React.createElement('main', { className:'s-main', style:{maxWidth:1000,margin:'0 auto',padding:'32px 24px'} },
+                    React.createElement('div', { className:'s-tabs', style:{display:'flex',gap:8,marginBottom:32} },
                         tabs.map(function(t) {
                             var isActive = tab === t.id;
                             return React.createElement('button', { key:t.id, onClick:function() { setTab(t.id); }, style:Object.assign({}, btnDark, { background:isActive?'rgba(220,38,38,0.1)':'#161616', borderColor:isActive?'rgba(220,38,38,0.4)':'#282828', color:isActive?'#EF4444':'#a0a0a0' }) }, t.label);
@@ -3686,8 +3777,8 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                                 React.createElement('button', { onClick:function() { setShowAdd(true); }, style:btnRed }, 'Add Your First Connection')
                             )
                         ) : conns.map(function(c) {
-                            return React.createElement('div', { key:c.id, style:Object.assign({}, cardStyle, {display:'flex',justifyContent:'space-between',alignItems:'center'}) },
-                                React.createElement('div', null,
+                            return React.createElement('div', { key:c.id, className:'s-card-row', style:Object.assign({}, cardStyle, {display:'flex',justifyContent:'space-between',alignItems:'center'}) },
+                                    React.createElement('div', null,
                                     React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
                                         React.createElement('div', { style:{width:8,height:8,borderRadius:'50%',background:c.is_active?'#22C55E':'#666'} }),
                                         React.createElement('span', { style:{fontSize:15,fontWeight:600} }, c.label)
@@ -3695,7 +3786,7 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                                     React.createElement('div', { style:{fontSize:12,color:'#666',marginTop:4} }, c.imap_username + ' @ ' + c.imap_host),
                                     React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:2} }, 'Last scan: ' + (c.last_scan_at ? new Date(c.last_scan_at).toLocaleString() : 'Never') + ' | ' + (c.last_scan_count || 0) + ' emails found')
                                 ),
-                                React.createElement('div', { style:{display:'flex',gap:8} },
+                            React.createElement('div', { className:'s-invite-row', style:{display:'flex',gap:8} },
                                     React.createElement('button', { onClick:function() {
                                         setScanningId(c.id);
                                         API.post('/scan/' + c.id, {}).then(function() { showToast('success', 'Scan started for ' + c.label + '. Check Dashboard for results.'); setScanningId(''); fetchConns(); }).catch(function(e) {
@@ -3806,7 +3897,7 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                     )
                 ),
                 showAdd ? React.createElement('div', { onClick:function() { setShowAdd(false); }, style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:100,animation:'fadeIn 0.15s ease-out'} },
-                    React.createElement('div', { className:'anim-modal', onClick:function(e) { e.stopPropagation(); }, style:{background:'#161616',border:'1px solid #1a1a1a',borderRadius:16,width:'100%',maxWidth:480,padding:28} },
+                    React.createElement('div', { className:'anim-modal s-modal', onClick:function(e) { e.stopPropagation(); }, style:{background:'#161616',border:'1px solid #1a1a1a',borderRadius:16,width:'100%',maxWidth:480,padding:28} },
                         React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20} },
                             React.createElement('div', { style:{fontSize:18,fontWeight:700} }, 'Add Email Connection'),
                             React.createElement('button', { onClick:function() { setShowAdd(false); }, style:{background:'#111',border:'1px solid #282828',borderRadius:8,width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#666',fontSize:13} }, '\\u2715')
