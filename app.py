@@ -1230,8 +1230,10 @@ async def _run_imap_scan(job_id: str, conn_data: dict):
         mail.select(conn_data.get("imap_folder", "INBOX"))
         _, msg_nums = mail.search(None, "UNSEEN")
         email_ids = msg_nums[0].split() if msg_nums[0] else []
-        print(f"[SENTINEL] per-user scan found {len(email_ids)} unread emails for {conn_data.get('imap_username')}", flush=True)
-        emails_to_scan = email_ids
+        total_unread = len(email_ids)
+        MAX_PER_SCAN = 100
+        emails_to_scan = email_ids[-MAX_PER_SCAN:] if total_unread > MAX_PER_SCAN else email_ids
+        print(f"[SENTINEL] per-user scan found {total_unread} unread, scanning {len(emails_to_scan)} for {conn_data.get('imap_username')}", flush=True)
         existing = store_get(conn_data["user_id"])
         existing_mids = set()
         for rec in existing.values():
@@ -1290,27 +1292,31 @@ async def _run_imap_scan(job_id: str, conn_data: dict):
         for batch_start in range(0, len(parsed_batch), BATCH_SIZE):
             batch = parsed_batch[batch_start:batch_start + BATCH_SIZE]
             meta = meta_batch[batch_start:batch_start + BATCH_SIZE]
-            verdicts = await analyzer.analyze_batch(batch)
-            for i, (parsed, verdict_data) in enumerate(zip(batch, verdicts)):
-                text_body = meta[i]["text_body"]
-                email_id = f"email-{uuid.uuid4().hex[:12]}"
-                record = {
-                    "id": email_id,
-                    **parsed,
-                    "received_at": datetime.now().isoformat(),
-                    "source": "imap_scan",
-                    "is_forwarded": ForwardedEmailParser.is_forwarded(text_body),
-                    "verdict": {
-                        "id": f"verdict-{uuid.uuid4().hex[:12]}",
-                        "email_id": email_id,
-                        **verdict_data,
-                        "analyzed_at": datetime.now().isoformat(),
-                    },
-                }
-                store_set(conn_data["user_id"], email_id, record)
-                from db import report_save
-                report_save(email_id, conn_data["user_id"], record, conn_data.get("org_id"))
-                analyzed += 1
+            try:
+                verdicts = await analyzer.analyze_batch(batch)
+                for i, (parsed, verdict_data) in enumerate(zip(batch, verdicts)):
+                    text_body = meta[i]["text_body"]
+                    email_id = f"email-{uuid.uuid4().hex[:12]}"
+                    record = {
+                        "id": email_id,
+                        **parsed,
+                        "received_at": datetime.now().isoformat(),
+                        "source": "imap_scan",
+                        "is_forwarded": ForwardedEmailParser.is_forwarded(text_body),
+                        "verdict": {
+                            "id": f"verdict-{uuid.uuid4().hex[:12]}",
+                            "email_id": email_id,
+                            **verdict_data,
+                            "analyzed_at": datetime.now().isoformat(),
+                        },
+                    }
+                    store_set(conn_data["user_id"], email_id, record)
+                    from db import report_save
+                    report_save(email_id, conn_data["user_id"], record, conn_data.get("org_id"))
+                    analyzed += 1
+            except Exception as e:
+                print(f"[SENTINEL] Batch analysis error (batch {batch_start}): {e}", flush=True)
+            await asyncio.sleep(1)
         print(f"[SENTINEL] per-user scan done: {analyzed} new, {skipped} skipped", flush=True)
         email_connection_update_scan(conn_data["id"], analyzed)
         scan_job_update(job_id, "completed", emails_found=len(emails_to_scan), emails_analyzed=analyzed)
