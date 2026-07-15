@@ -2165,26 +2165,26 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
         .topbar-right { display: flex; align-items: center; gap: 12px; }
         .owner-badge { background: linear-gradient(135deg, #DC2626, #991B1B); color: white; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
         .main { padding: 80px 32px 32px; max-width: 1400px; margin: 0 auto; }
-        .page-header { margin-bottom: 24px; }
+        .page-header { margin-bottom: 16px; }
         .page-header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
         .page-header p { color: #888; font-size: 14px; }
-        .controls { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; }
+        .controls { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
         .controls select, .controls input { background: #161616; border: 1px solid #2a2a2a; color: #f5f5f5; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-family: inherit; }
         .controls select:focus, .controls input:focus { outline: none; border-color: #DC2626; }
         .btn { background: #161616; border: 1px solid #2a2a2a; color: #f5f5f5; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; }
         .btn:hover { border-color: #555; background: #1e1e1e; }
         .btn.primary { background: linear-gradient(135deg, #DC2626, #991B1B); border: 1px solid rgba(220,38,38,0.3); }
         .btn.primary:hover { box-shadow: 0 4px 20px rgba(220,38,38,0.3); }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .stat-card { background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 14px 16px; }
         .stat-card .label { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
         .stat-card .value { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; font-family: 'JetBrains Mono', monospace; }
         .stat-card .value.red { color: #DC2626; }
-        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .chart-card { background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px; margin-bottom: 0; }
         .chart-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
-        .chart-card canvas { width: 100% !important; }
-        .table-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; margin-bottom: 24px; overflow-x: auto; }
+        .chart-card canvas { width: 100% !important; max-height: 180px; }
+        .table-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; margin-bottom: 24px; overflow-x: auto; max-height: 420px; overflow-y: auto; }
         .table-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th { text-align: left; padding: 10px 12px; border-bottom: 1px solid #1e1e1e; color: #888; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; }
@@ -2269,52 +2269,52 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
 
         <div id="loading" class="loading">Loading analytics...</div>
         <div id="content" style="display: none;">
-            <h2 style="font-size:20px;font-weight:700;margin:20px 0 12px;color:#DC2626;">Email Threat Analytics</h2>
+            <h2 style="font-size:18px;font-weight:700;margin:12px 0 10px;color:#DC2626;">Email Threat Analytics</h2>
             <div id="emailStats" class="stats-grid"></div>
             <div class="chart-grid">
                 <div class="chart-card">
                     <h3>Threat Distribution</h3>
-                    <canvas id="threatChart" height="200"></canvas>
+                    <canvas id="threatChart" height="150"></canvas>
                 </div>
                 <div class="chart-card">
                     <h3>Top Email Senders</h3>
-                    <canvas id="senderChart" height="200"></canvas>
+                    <canvas id="senderChart" height="150"></canvas>
                 </div>
             </div>
             <div id="siteAnalyticsSection">
-            <h2 style="font-size:20px;font-weight:700;margin:20px 0 12px;color:#C084FC;">Site Analytics</h2>
+            <h2 style="font-size:18px;font-weight:700;margin:12px 0 10px;color:#C084FC;">Site Analytics</h2>
             <div class="stats-grid" id="statsGrid"></div>
             <div class="chart-grid">
                 <div class="chart-card">
                     <h3>Activity by Hour (UTC)</h3>
-                    <canvas id="hourlyChart" height="200"></canvas>
+                    <canvas id="hourlyChart" height="150"></canvas>
                 </div>
                 <div class="chart-card">
                     <h3>Visitors by Region</h3>
-                    <canvas id="countryChart" height="200"></canvas>
+                    <canvas id="countryChart" height="150"></canvas>
                 </div>
                 <div class="chart-card">
                     <h3>Device Types</h3>
-                    <canvas id="deviceChart" height="200"></canvas>
+                    <canvas id="deviceChart" height="150"></canvas>
                 </div>
                 <div class="chart-card">
                     <h3>Browsers</h3>
-                    <canvas id="browserChart" height="200"></canvas>
+                    <canvas id="browserChart" height="150"></canvas>
                 </div>
             </div>
             <div class="chart-grid">
                 <div class="chart-card">
                     <h3>Operating Systems</h3>
-                    <canvas id="osChart" height="200"></canvas>
+                    <canvas id="osChart" height="150"></canvas>
                 </div>
                 <div class="chart-card">
                     <h3>Activity by Day of Week</h3>
-                    <canvas id="dowChart" height="200"></canvas>
+                    <canvas id="dowChart" height="150"></canvas>
                 </div>
             </div>
-            <div class="chart-card" style="margin-bottom: 24px;">
+            <div class="chart-card" style="margin-bottom: 16px;">
                 <h3>Top Pages</h3>
-                <div id="topPages"></div>
+                <div id="topPages" style="max-height:180px;overflow-y:auto;"></div>
             </div>
             <div class="table-card">
                 <h3>Recent Unique Visitors</h3>
@@ -2465,10 +2465,14 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
 
     function renderTable(ips) {
         const body = document.getElementById('ipBody');
-        body.innerHTML = ips.map(ip => {
+        const shown = ips.slice(0, 10);
+        body.innerHTML = shown.map(ip => {
             const devCls = (ip.device_type || '').toLowerCase();
             return '<tr><td>' + ip.ip + '</td><td>' + (ip.country || '-') + '</td><td>' + (ip.city || '-') + '</td><td><span class="tag ' + devCls + '">' + (ip.device_type || '-') + '</span></td><td>' + (ip.browser || '-') + '</td><td>' + (ip.os || '-') + '</td><td>' + ip.request_count + '</td><td>' + new Date(ip.first_seen).toLocaleDateString() + '</td></tr>';
         }).join('');
+        if (ips.length > 10) {
+            body.innerHTML += '<tr><td colspan="8" style="text-align:center;color:#888;padding:12px;">+ ' + (ips.length - 10) + ' more visitors</td></tr>';
+        }
     }
 
     async function logout() {
