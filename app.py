@@ -1228,10 +1228,10 @@ async def _run_imap_scan(job_id: str, conn_data: dict):
         mail = _imap.IMAP4_SSL(conn_data["imap_host"], conn_data["imap_port"])
         mail.login(conn_data["imap_username"], conn_data["imap_password_enc"])
         mail.select(conn_data.get("imap_folder", "INBOX"))
-        _, msg_nums = mail.search(None, "ALL")
+        _, msg_nums = mail.search(None, "UNSEEN")
         email_ids = msg_nums[0].split() if msg_nums[0] else []
-        print(f"[SENTINEL] per-user scan ALL found {len(email_ids)} total emails for {conn_data.get('imap_username')}", flush=True)
-        emails_to_scan = email_ids[-50:]
+        print(f"[SENTINEL] per-user scan found {len(email_ids)} unread emails for {conn_data.get('imap_username')}", flush=True)
+        emails_to_scan = email_ids
         existing = store_get(conn_data["user_id"])
         existing_mids = set()
         for rec in existing.values():
@@ -1311,7 +1311,6 @@ async def _run_imap_scan(job_id: str, conn_data: dict):
                 from db import report_save
                 report_save(email_id, conn_data["user_id"], record, conn_data.get("org_id"))
                 analyzed += 1
-        mail.logout()
         print(f"[SENTINEL] per-user scan done: {analyzed} new, {skipped} skipped", flush=True)
         email_connection_update_scan(conn_data["id"], analyzed)
         scan_job_update(job_id, "completed", emails_found=len(emails_to_scan), emails_analyzed=analyzed)
