@@ -3785,7 +3785,7 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                     React.createElement('span', { style:stepNum }, '1'),
                     React.createElement('div', null,
                         React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Enable 2-Step Verification'),
-                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Go to ', React.createElement('a', { href:'https://myaccount.google.com/security', target:'_blank', style:{color:'#EF4444'} }, 'myaccount.google.com/security'), ' and turn on 2-Step Verification if you haven\'t already. This is required before you can create an app password.')
+                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Go to ', React.createElement('a', { href:'https://myaccount.google.com/security', target:'_blank', style:{color:'#EF4444'} }, 'myaccount.google.com/security'), ' and turn on 2-Step Verification if you have not already. This is required before you can create an app password.')
                     )
                 ),
                 React.createElement('div', { style:guideStep },
@@ -3812,7 +3812,7 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                 React.createElement('div', { style:guideStep },
                     React.createElement('span', { style:stepNum }, '5'),
                     React.createElement('div', null,
-                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'You\'re Done!'),
+                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'All Set!'),
                         React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Click "Add Connection" below. Sentinel will verify your credentials by logging into your inbox via IMAP.')
                     )
                 )
