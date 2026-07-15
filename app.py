@@ -1639,6 +1639,13 @@ async def imap_check(request: Request):
         mid = rec.get("message_id", "")
         if mid:
             existing_mids.add(mid)
+    seen_mids_file = os.path.join(db.DATA_DIR, f"seen_mids_{user['user_id']}.json")
+    try:
+        with open(seen_mids_file, "r") as f:
+            seen_mids_file_data = json.load(f)
+            existing_mids.update(seen_mids_file_data)
+    except Exception:
+        pass
     print(f"[SENTINEL] imap/check {len(existing_mids)} already analyzed emails", flush=True)
     errors = []
     BATCH_SIZE = 10
@@ -1700,7 +1707,7 @@ async def imap_check(request: Request):
             for batch_start in range(0, len(parsed_batch), BATCH_SIZE):
                 batch = parsed_batch[batch_start:batch_start + BATCH_SIZE]
                 meta = meta_batch[batch_start:batch_start + BATCH_SIZE]
-                verdicts = await analyzer.analyze_batch(batch, org_id=conn_data.get("org_id", ""))
+                verdicts = await analyzer.analyze_batch(batch, org_id=conn_full.get("org_id", ""))
                 for i, (parsed, verdict_data) in enumerate(zip(batch, verdicts)):
                     text_body = meta[i]["text_body"]
                     email_id = f"email-{uuid.uuid4().hex[:12]}"
@@ -1723,6 +1730,11 @@ async def imap_check(request: Request):
             err_msg = f"{conn.get('label')}: {e}"
             print(f"[SENTINEL] imap/check error: {err_msg}", flush=True)
             errors.append(err_msg)
+    try:
+        with open(seen_mids_file, "w") as f:
+            json.dump(list(existing_mids), f)
+    except Exception:
+        pass
     resp = {"status": "success", "emails_found": len(total_processed), "emails_processed": len(total_processed), "results": total_processed}
     if errors:
         resp["errors"] = errors
@@ -3110,7 +3122,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                                 React.createElement('div', { style:{fontSize:10,color:'#666',letterSpacing:'0.05em',textTransform:'uppercase'} }, 'Phishing Triage')
                             )
                         ),
-                        React.createElement('div', { style:{display:'flex',gap:10,alignItems:'center'} },
+                        React.createElement('div', { style:{display:'flex',gap:10,alignItems:'center',flexWrap:'nowrap',overflow:'hidden',minHeight:40} },
                             React.createElement('span', { style:{fontSize:12,color:'#666',marginRight:8} }, username),
                             React.createElement('button', { onClick:function() { setView('dashboard'); }, style:Object.assign({}, btnDark, { background:view==='dashboard'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='dashboard'?'rgba(220,38,38,0.4)':'#282828', color:view==='dashboard'?'#EF4444':'#a0a0a0' }) }, 'Dashboard'),
                             React.createElement('button', { onClick:function() { setView('team'); fetchTeam(); }, style:Object.assign({}, btnDark, { background:view==='team'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='team'?'rgba(220,38,38,0.4)':'#282828', color:view==='team'?'#EF4444':'#a0a0a0' }) }, 'Team'),
@@ -3508,6 +3520,8 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             var showAdd = _showAdd[0], setShowAdd = _showAdd[1];
             var _toast = useState(null);
             var toast = _toast[0], setToast = _toast[1];
+            var _scanningId = useState('');
+            var scanningId = _scanningId[0], setScanningId = _scanningId[1];
 
             var showToast = function(type, msg) {
                 setToast({type:type, msg:msg});
@@ -3589,12 +3603,14 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                                 ),
                                 React.createElement('div', { style:{display:'flex',gap:8} },
                                     React.createElement('button', { onClick:function() {
-                                        API.post('/scan/' + c.id, {}).then(function() { showToast('success', 'Scan started for ' + c.label + '. Check Dashboard for results.'); fetchConns(); }).catch(function(e) {
+                                        setScanningId(c.id);
+                                        API.post('/scan/' + c.id, {}).then(function() { showToast('success', 'Scan started for ' + c.label + '. Check Dashboard for results.'); setScanningId(''); fetchConns(); }).catch(function(e) {
                                             var msg = 'Scan failed';
                                             if (e && e.message) { msg = e.message; }
                                             showToast('error', msg);
+                                            setScanningId('');
                                         });
-                                    }, style:Object.assign({}, btnDark, {fontSize:11,padding:'6px 12px'}) }, 'Scan Now'),
+                                    }, disabled: scanningId === c.id, style:Object.assign({}, btnDark, {fontSize:11,padding:'6px 12px', opacity: scanningId === c.id ? 0.6 : 1, cursor: scanningId === c.id ? 'not-allowed' : 'pointer'}) }, scanningId === c.id ? 'Scanning...' : 'Scan Now'),
                                     React.createElement('button', { onClick:function() {
                                         API.del('/connections/' + c.id).then(function() { showToast('success', 'Connection removed'); fetchConns(); }).catch(function(e) { showToast('error', 'Failed to remove: ' + (e.message || 'Unknown')); });
                                     }, style:Object.assign({}, btnBase, {background:'rgba(220,38,38,0.08)',border:'1px solid rgba(220,38,38,0.2)',color:'#FCA5A5',fontSize:11,padding:'6px 12px'}) }, 'Remove')
