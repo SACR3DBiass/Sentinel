@@ -112,6 +112,12 @@ def require_auth(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
+def resolve_user_db(user: dict) -> Optional[dict]:
+    user_db = user_get_by_id(user["user_id"])
+    if not user_db:
+        user_db = user_get_by_username(user["username"])
+    return user_db
+
 # ============================================================================
 # SCAN RATE LIMITER
 # ============================================================================
@@ -1052,9 +1058,7 @@ async def get_me(request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
-    if not user_db:
-        user_db = user_get_by_username(user["username"])
+    user_db = resolve_user_db(user)
     return {
         "user_id": user["user_id"],
         "username": user["username"],
@@ -1088,9 +1092,7 @@ async def create_email_connection(payload: EmailConnectionRequest, request: Requ
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     print(f"[SENTINEL] Creating connection for user {user.get('username')}: host={payload.imap_host} user={payload.imap_username}", flush=True)
-    user_db = user_get_by_id(user["user_id"])
-    if not user_db:
-        user_db = user_get_by_username(user["username"])
+    user_db = resolve_user_db(user)
     if not user_db:
         print(f"[SENTINEL] User not found: {user['user_id']}", flush=True)
         raise HTTPException(status_code=404, detail="User not found")
@@ -1161,8 +1163,8 @@ async def trigger_scan(conn_id: str, request: Request):
         raise HTTPException(status_code=400, detail=f"IMAP login failed: {e}. Check your email and app password.")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Cannot connect to {conn_data['imap_host']}: {e}")
-    user_db = user_get_by_id(user["user_id"])
-    org_id = user_db.get("org_id") or ""
+    user_db = resolve_user_db(user)
+    org_id = user_db.get("org_id") or "" if user_db else ""
     job_id = scan_job_create(conn_id, user["user_id"], org_id)
     if not job_id:
         raise HTTPException(status_code=500, detail="Failed to create scan job")
@@ -1326,7 +1328,7 @@ async def create_invite(payload: InviteRequest, request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db:
         raise HTTPException(status_code=404, detail="User not found")
     if user_db.get("role") not in ("owner", "admin"):
@@ -1347,7 +1349,7 @@ async def list_invites(request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db:
         raise HTTPException(status_code=404, detail="User not found")
     org_id = user_db.get("org_id")
@@ -1364,7 +1366,7 @@ async def delete_invite(invite_id: str, request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db:
         raise HTTPException(status_code=404, detail="User not found")
     ok = invite_delete(invite_id, user_db.get("org_id", ""))
@@ -1387,7 +1389,7 @@ async def list_team(request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db:
         raise HTTPException(status_code=404, detail="User not found")
     org_id = user_db.get("org_id")
@@ -1401,7 +1403,7 @@ async def remove_team_member(member_id: str, request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db:
         raise HTTPException(status_code=404, detail="User not found")
     if user_db.get("role") not in ("owner", "admin"):
@@ -1436,7 +1438,7 @@ async def team_overview(request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db:
         raise HTTPException(status_code=404, detail="User not found")
     role = user_db.get("role", "member")
@@ -1479,7 +1481,7 @@ async def team_member_emails(member_id: str, request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db:
         raise HTTPException(status_code=404, detail="User not found")
     if user_db.get("role") not in ("owner", "admin"):
@@ -1494,7 +1496,7 @@ async def team_scan_member(member_id: str, request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db:
         raise HTTPException(status_code=404, detail="User not found")
     if user_db.get("role") not in ("owner", "admin"):
@@ -1525,7 +1527,7 @@ async def get_org_info(request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db or not user_db.get("org_id"):
         return {"org": None}
     org = org_get(user_db["org_id"])
@@ -2042,7 +2044,7 @@ def require_owner(request: Request) -> dict:
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user_db = user_get_by_id(user["user_id"])
+    user_db = resolve_user_db(user)
     if not user_db or user_db.get("role") != "owner":
         raise HTTPException(status_code=403, detail="Owner access only")
     return user
@@ -2053,17 +2055,17 @@ def require_owner(request: Request) -> dict:
 # ============================================================================
 @app.get("/api/analytics/overview")
 async def analytics_overview(request: Request, days: int = Query(30, ge=1, le=365)):
-    require_auth(request)
+    require_owner(request)
     return db.request_log_stats(days)
 
 @app.get("/api/analytics/ips")
 async def analytics_ips(request: Request, days: int = Query(7, ge=1, le=90)):
-    require_auth(request)
+    require_owner(request)
     return {"ips": db.request_log_unique_ips(days)}
 
 @app.get("/api/analytics/realtime")
 async def analytics_realtime(request: Request):
-    require_auth(request)
+    require_owner(request)
     since = (datetime.utcnow() - timedelta(minutes=15)).isoformat()
     sb = db.get_supabase()
     if sb:
@@ -2345,16 +2347,20 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
                 fetch('/api/analytics/ips?days=' + days, { headers: authHeaders() }),
                 fetch('/api/analytics/emails', { headers: authHeaders() })
             ]);
-            if (overviewRes.status === 401 || overviewRes.status === 403) { window.location.href = '/login'; return; }
-            const overview = await overviewRes.json();
-            const ipsData = await ipsRes.json();
+            if (overviewRes.status === 401) { window.location.href = '/login'; return; }
             const emailData = emailRes.ok ? await emailRes.json() : null;
-            if (overview.detail) { window.location.href = '/login'; return; }
             renderEmailStats(emailData);
             renderEmailCharts(emailData);
-            renderStats(overview);
-            renderCharts(overview);
-            renderTable(ipsData.ips || []);
+            const isOwner = overviewRes.ok && overviewRes.status !== 403;
+            if (isOwner) {
+                const overview = await overviewRes.json();
+                const ipsData = await ipsRes.json();
+                if (!overview.detail) {
+                    renderStats(overview);
+                    renderCharts(overview);
+                    renderTable(ipsData.ips || []);
+                }
+            }
             document.getElementById('loading').style.display = 'none';
             document.getElementById('content').style.display = 'block';
         } catch (e) {
