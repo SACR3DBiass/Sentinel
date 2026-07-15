@@ -2048,17 +2048,17 @@ def require_owner(request: Request) -> dict:
 # ============================================================================
 @app.get("/api/analytics/overview")
 async def analytics_overview(request: Request, days: int = Query(30, ge=1, le=365)):
-    require_owner(request)
+    require_auth(request)
     return db.request_log_stats(days)
 
 @app.get("/api/analytics/ips")
 async def analytics_ips(request: Request, days: int = Query(7, ge=1, le=90)):
-    require_owner(request)
+    require_auth(request)
     return {"ips": db.request_log_unique_ips(days)}
 
 @app.get("/api/analytics/realtime")
 async def analytics_realtime(request: Request):
-    require_owner(request)
+    require_auth(request)
     since = (datetime.utcnow() - timedelta(minutes=15)).isoformat()
     sb = db.get_supabase()
     if sb:
@@ -2075,6 +2075,27 @@ async def analytics_realtime(request: Request):
         data = [dict(r) for r in rows]
         conn.close()
     return {"active_visitors": len(set(r.get("ip", "") for r in data)), "requests": len(data), "recent": data[-50:]}
+
+
+@app.get("/api/analytics/emails")
+async def analytics_emails(request: Request):
+    user = require_auth(request)
+    store = store_get(user["user_id"])
+    emails = list(store.values())
+    total = len(emails)
+    threats = sum(1 for e in emails if (e.get("verdict") or {}).get("threat_level") == "malicious")
+    suspicious = sum(1 for e in emails if (e.get("verdict") or {}).get("threat_level") == "suspicious")
+    safe = sum(1 for e in emails if (e.get("verdict") or {}).get("threat_level") == "safe")
+    feedback_count = sum(1 for e in emails if e.get("feedback_corrected"))
+    from collections import Counter
+    senders = Counter(e.get("from_address", "unknown") for e in emails)
+    models = Counter((e.get("verdict") or {}).get("llm_model", "unknown") for e in emails)
+    return {
+        "total": total, "threats": threats, "suspicious": suspicious, "safe": safe,
+        "feedback_count": feedback_count,
+        "top_senders": dict(senders.most_common(10)),
+        "models_used": dict(models),
+    }
 
 
 # ============================================================================
@@ -2199,8 +2220,8 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
             </div>
         </div>
         <div class="topbar-right">
-            <span class="owner-badge">Owner</span>
-            <a href="/dashboard" class="btn" onclick="event.preventDefault(); logout()">Logout</a>
+            <a href="/dashboard" class="btn">Dashboard</a>
+            <a href="/login" class="btn" onclick="event.preventDefault(); logout()">Logout</a>
         </div>
     </div>
 
@@ -2223,6 +2244,19 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
 
         <div id="loading" class="loading">Loading analytics...</div>
         <div id="content" style="display: none;">
+            <h2 style="font-size:20px;font-weight:700;margin:20px 0 12px;color:#DC2626;">Email Threat Analytics</h2>
+            <div id="emailStats" class="stats-grid"></div>
+            <div class="chart-grid">
+                <div class="chart-card">
+                    <h3>Threat Distribution</h3>
+                    <canvas id="threatChart" height="200"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Top Email Senders</h3>
+                    <canvas id="senderChart" height="200"></canvas>
+                </div>
+            </div>
+            <h2 style="font-size:20px;font-weight:700;margin:20px 0 12px;color:#C084FC;">Site Analytics</h2>
             <div class="stats-grid" id="statsGrid"></div>
             <div class="chart-grid">
                 <div class="chart-card">
@@ -2281,14 +2315,18 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
         document.getElementById('loading').style.display = 'block';
         document.getElementById('content').style.display = 'none';
         try {
-            const [overviewRes, ipsRes] = await Promise.all([
+            const [overviewRes, ipsRes, emailRes] = await Promise.all([
                 fetch('/api/analytics/overview?days=' + days, { headers: authHeaders() }),
-                fetch('/api/analytics/ips?days=' + days, { headers: authHeaders() })
+                fetch('/api/analytics/ips?days=' + days, { headers: authHeaders() }),
+                fetch('/api/analytics/emails', { headers: authHeaders() })
             ]);
             if (overviewRes.status === 401 || overviewRes.status === 403) { window.location.href = '/login'; return; }
             const overview = await overviewRes.json();
             const ipsData = await ipsRes.json();
+            const emailData = emailRes.ok ? await emailRes.json() : null;
             if (overview.detail) { window.location.href = '/login'; return; }
+            renderEmailStats(emailData);
+            renderEmailCharts(emailData);
             renderStats(overview);
             renderCharts(overview);
             renderTable(ipsData.ips || []);
@@ -2296,6 +2334,39 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
             document.getElementById('content').style.display = 'block';
         } catch (e) {
             document.getElementById('loading').innerHTML = '<div class="empty-state"><h2>Error loading data</h2><p>' + e.message + '</p></div>';
+        }
+    }
+
+    function renderEmailStats(data) {
+        const grid = document.getElementById('emailStats');
+        if (!data) { grid.innerHTML = '<div class="stat-card"><div class="label">Email Data</div><div class="value">Unavailable</div></div>'; return; }
+        const threatRate = data.total > 0 ? Math.round((data.threats / data.total) * 100) : 0;
+        grid.innerHTML = [
+            { label: 'Total Emails Scanned', value: data.total.toLocaleString(), cls: '' },
+            { label: 'Threats Blocked', value: data.threats.toLocaleString(), cls: 'red' },
+            { label: 'Suspicious', value: data.suspicious.toLocaleString(), cls: '' },
+            { label: 'Safe', value: data.safe.toLocaleString(), cls: '' },
+            { label: 'Threat Rate', value: threatRate + '%', cls: 'red' },
+            { label: 'Feedback Corrections', value: data.feedback_count.toLocaleString(), cls: '' },
+        ].map(s => '<div class="stat-card"><div class="label">' + s.label + '</div><div class="value ' + s.cls + '">' + s.value + '</div></div>').join('');
+    }
+
+    function renderEmailCharts(data) {
+        if (!data) return;
+        if (charts.threat) charts.threat.destroy();
+        if (charts.sender) charts.sender.destroy();
+        const pieOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#ccc', font: { size: 12 }, padding: 12 } } } };
+        const colors = ['#DC2626','#F97316','#EAB308','#22C55E','#3B82F6','#A855F7','#EC4899','#14B8A6','#6366F1','#F43F5E'];
+        if (data.total > 0) {
+            charts.threat = new Chart(document.getElementById('threatChart'), {
+                type: 'doughnut', data: { labels: ['Threats','Suspicious','Safe'], datasets: [{ data: [data.threats, data.suspicious, data.safe], backgroundColor: ['#DC2626','#EAB308','#22C55E'], borderWidth: 0 }] }, options: pieOpts
+            });
+        }
+        const senders = Object.entries(data.top_senders || {}).slice(0, 8);
+        if (senders.length > 0) {
+            charts.sender = new Chart(document.getElementById('senderChart'), {
+                type: 'bar', data: { labels: senders.map(s => s[0].length > 25 ? s[0].substring(0,25)+'...' : s[0]), datasets: [{ data: senders.map(s => s[1]), backgroundColor: colors.slice(0, senders.length), borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#888', font: { size: 11 } }, grid: { color: '#1a1a1a' } }, y: { ticks: { color: '#888', font: { size: 11 } }, grid: { color: '#1a1a1a' } } } }
+            });
         }
     }
 
@@ -3010,7 +3081,9 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                 fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + getToken() } })
                     .then(function(r) { return r.json(); })
                     .then(function(data) { if (data.role) setUserRole(data.role); })
-                    .catch(function() {});
+                    .catch(function() {
+                        try { var payload = JSON.parse(atob(getToken().split('.')[1])); if (payload.role) setUserRole(payload.role); } catch(e) {}
+                    });
                 API.get('/org').then(function(data) {
                     if (data.org) setTeamRole('admin');
                 }).catch(function() {});
@@ -3148,7 +3221,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                             React.createElement('button', { onClick:function() { setView('dashboard'); }, style:Object.assign({}, btnDark, { background:view==='dashboard'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='dashboard'?'rgba(220,38,38,0.4)':'#282828', color:view==='dashboard'?'#EF4444':'#a0a0a0' }) }, 'Dashboard'),
                             React.createElement('button', { onClick:function() { setView('team'); fetchTeam(); }, style:Object.assign({}, btnDark, { background:view==='team'?'rgba(220,38,38,0.1)':'#161616', borderColor:view==='team'?'rgba(220,38,38,0.4)':'#282828', color:view==='team'?'#EF4444':'#a0a0a0' }) }, 'Team'),
                             React.createElement('button', { onClick:function() { window.location.href='/settings'; }, style:btnDark }, 'Settings'),
-                            userRole === 'owner' ? React.createElement('button', { onClick:function() { window.location.href='/analytics'; }, style:Object.assign({}, btnDark, {borderColor:'rgba(168,85,247,0.3)',color:'#C084FC'}) }, 'Analytics') : null,
+                            React.createElement('button', { onClick:function() { window.location.href='/analytics'; }, style:Object.assign({}, btnDark, {borderColor:'rgba(168,85,247,0.3)',color:'#C084FC'}) }, 'Analytics'),
                             React.createElement('button', { onClick:function() { setShowPaste(true); }, style:btnDark }, 'Paste Email'),
                             React.createElement('button', { onClick:function() { window.open('/api/v1/reports/monthly', '_blank'); }, style:Object.assign({}, btnDark, {borderColor:'rgba(34,197,94,0.3)',color:'#86EFAC'}) }, '\\u2B07 Executive Report'),
                             connections.length > 0 ? React.createElement('select', {
