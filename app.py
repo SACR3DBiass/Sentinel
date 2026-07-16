@@ -62,6 +62,9 @@ class Settings:
     IMAP_FOLDER: str = os.getenv("IMAP_FOLDER", "INBOX")
     IMAP_POLL_INTERVAL: int = int(os.getenv("IMAP_POLL_INTERVAL", "30"))
     COST_PER_INCIDENT: float = float(os.getenv("COST_PER_INCIDENT", "4500"))
+    # Send the auth cookie only over HTTPS. Set COOKIE_SECURE=true in production;
+    # left false for local http://localhost development.
+    COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
     # Comma-separated list of allowed browser origins. Never "*" with credentials.
     # Set CORS_ORIGINS in prod, e.g. "https://app.yourdomain.com".
     ALLOWED_ORIGINS: List[str] = [
@@ -180,6 +183,52 @@ def mark_scan_started(user_id: str):
     _scan_cooldowns[user_id] = time.time()
 
 # ============================================================================
+# AUTH RATE LIMITER (per-IP, in-memory sliding window)
+# ============================================================================
+_auth_attempts: dict = {}  # "bucket:ip" -> [timestamps]
+AUTH_RATE_WINDOW = 60      # seconds
+
+def _client_ip(request: Request) -> str:
+    """Best-effort real client IP. Only trusts X-Forwarded-For if it's a valid IP."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        candidate = fwd.split(",")[0].strip()
+        try:
+            ipaddress.ip_address(candidate)
+            return candidate
+        except ValueError:
+            pass
+    return request.client.host if request.client else "unknown"
+
+def enforce_rate_limit(request: Request, bucket: str, max_attempts: int, window: int = AUTH_RATE_WINDOW):
+    """Raise 429 if this IP has exceeded max_attempts within the window."""
+    ip = _client_ip(request)
+    key = f"{bucket}:{ip}"
+    now = time.time()
+    attempts = [t for t in _auth_attempts.get(key, []) if now - t < window]
+    if len(attempts) >= max_attempts:
+        retry = int(window - (now - attempts[0])) + 1
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many attempts. Try again in {retry}s.",
+            headers={"Retry-After": str(retry)},
+        )
+    attempts.append(now)
+    _auth_attempts[key] = attempts
+
+# ============================================================================
+# USER RECORD SANITIZER
+# ============================================================================
+_USER_SECRET_FIELDS = {"password_hash", "password", "hashed_password", "secret", "token"}
+
+def _public_user(record: dict) -> dict:
+    """Strip secret fields before any user record is returned to a client.
+    Defense-in-depth so a password hash can never leak even if a query changes."""
+    if not isinstance(record, dict):
+        return record
+    return {k: v for k, v in record.items() if k not in _USER_SECRET_FIELDS}
+
+# ============================================================================
 # GEO-IP LOOKUP + DEVICE PARSING + REQUEST LOGGING
 # ============================================================================
 _geo_cache: dict = {}
@@ -266,16 +315,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             path = request.url.path
             if any(path.startswith(ex) for ex in _ANALYTICS_EXCLUDE_PATHS):
                 return response
-            ip = request.client.host if request.client else "unknown"
-            forwarded = request.headers.get("x-forwarded-for", "")
-            if forwarded:
-                candidate = forwarded.split(",")[0].strip()
-                # Only trust the header if it's a syntactically valid IP address.
-                try:
-                    ipaddress.ip_address(candidate)
-                    ip = candidate
-                except ValueError:
-                    pass
+            ip = _client_ip(request)
             ua_string = request.headers.get("user-agent", "")
             ua_parsed = _parse_user_agent(ua_string)
             geo = _lookup_geo(ip)
@@ -1102,7 +1142,9 @@ async def startup():
 # AUTH ROUTES
 # ============================================================================
 @app.post("/api/auth/register")
-async def register(payload: RegisterRequest):
+async def register(payload: RegisterRequest, request: Request):
+    # Block scripted mass-signup: max 5 new accounts per IP per minute.
+    enforce_rate_limit(request, "register", max_attempts=5)
     existing = user_get_by_username(payload.username)
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -1120,7 +1162,9 @@ async def register(payload: RegisterRequest):
     return {"status": "success", "message": "Account created"}
 
 @app.post("/api/auth/login")
-async def login(payload: LoginRequest, response: Response):
+async def login(payload: LoginRequest, response: Response, request: Request):
+    # Throttle brute-force: max 10 login attempts per IP per minute.
+    enforce_rate_limit(request, "login", max_attempts=10)
     user = user_get_by_username(payload.username)
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -1144,7 +1188,7 @@ async def login(payload: LoginRequest, response: Response):
             print(f"[SENTINEL] User sync error: {e}", flush=True)
     user_update_last_login(user["id"])
     token = create_token(user["id"], user["username"])
-    response.set_cookie(key="sentinel_token", value=token, httponly=True, samesite="lax", max_age=settings.JWT_EXPIRY_HOURS * 3600)
+    response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=settings.JWT_EXPIRY_HOURS * 3600)
     return {"status": "success", "token": token, "username": user["username"], "user_id": user["id"]}
 
 @app.post("/api/auth/logout")
@@ -1504,7 +1548,7 @@ async def list_team(request: Request):
     if not org_id:
         return {"members": []}
     members = user_list_org(org_id)
-    return {"members": members}
+    return {"members": [_public_user(m) for m in members]}
 
 @app.delete("/api/v1/team/{member_id}")
 async def remove_team_member(member_id: str, request: Request):
