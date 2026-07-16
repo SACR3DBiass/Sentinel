@@ -18,8 +18,8 @@ import db
 
 app = FastAPI(title="SENTINEL Lite")
 
-JWT_SECRET = os.getenv("JWT_SECRET", "sentinel-secret-change-in-production-2024")
-JWT_EXPIRY_HOURS = 72
+JWT_SECRET = db.JWT_SECRET
+JWT_EXPIRY_HOURS = db.JWT_EXPIRY_HOURS
 
 LITE_PROMPT = """You are a phishing detection AI. Analyze the email below and determine if it is phishing, scam, or legitimate.
 
@@ -515,6 +515,9 @@ async def lite_register(payload: RegisterRequest):
     existing = db.user_get_by_username(payload.username)
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
+    existing_email = db.user_get_by_email(payload.email)
+    if existing_email:
+        raise HTTPException(status_code=400, detail="Email already registered")
     pw_hash = _hash_password(payload.password)
     org_id = None
     if db.get_supabase():

@@ -14,6 +14,12 @@ _supabase_client = None
 _supabase_available = False
 _store_lock = threading.Lock()
 
+# Shared JWT secret — both app.py and lite.py import this so tokens work across
+# the main app and the /lite sub-app.  Prefer the env var in production.
+import secrets as _secrets
+JWT_SECRET: str = os.getenv("JWT_SECRET") or _secrets.token_urlsafe(48)
+JWT_EXPIRY_HOURS: int = 72
+
 # ============================================================================
 # SUPABASE CONNECTION
 # ============================================================================
@@ -544,8 +550,21 @@ def user_get_by_email(email: str) -> Optional[dict]:
         try:
             result = sb.table("users").select("*").eq("email", email).execute()
             return result.data[0] if result.data else None
-        except Exception:
-            return None
+        except Exception as e:
+            print(f"[SENTINEL] user_get_by_email (Supabase) failed: {e}", flush=True)
+    # Local SQLite fallback
+    try:
+        import sqlite3 as _sqlite3
+        conn = _sqlite3.connect(_local_db_path())
+        conn.row_factory = _sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE email = ?", (email,))
+        row = cur.fetchone()
+        conn.close()
+        if row:
+            return dict(row)
+    except Exception as e:
+        print(f"[SENTINEL] user_get_by_email (local) failed: {e}", flush=True)
     return None
 
 def user_set_role(user_id: str, role: str) -> bool:
@@ -939,7 +958,7 @@ def invite_accept(token: str, user_id: str) -> bool:
             return True
         except Exception:
             pass
-    # Local fallback
+    # Local fallback — also update the user's role and org_id
     invite = invite_get_by_token(token)
     if not invite:
         return False
@@ -950,6 +969,17 @@ def invite_accept(token: str, user_id: str) -> bool:
                 inv["accepted_at"] = datetime.utcnow().isoformat()
                 _save_json(_invites_file_path(), invites)
                 break
+        # Update user role/org_id in local SQLite
+        try:
+            import sqlite3 as _sqlite3
+            conn = _sqlite3.connect(_local_db_path())
+            cur = conn.cursor()
+            cur.execute("UPDATE users SET role = ?, org_id = ? WHERE id = ?",
+                        (invite.get("role", "member"), invite.get("org_id"), user_id))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
     return True
 
 def invite_list_org(org_id: str) -> List[dict]:

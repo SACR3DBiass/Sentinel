@@ -54,7 +54,7 @@ class Settings:
     WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET") or secrets.token_urlsafe(48)
     APP_NAME: str = "SENTINEL"
     APP_VERSION: str = "3.0.0"
-    JWT_SECRET: str = os.getenv("JWT_SECRET") or secrets.token_urlsafe(48)
+    JWT_SECRET: str = os.getenv("JWT_SECRET") or db.JWT_SECRET
     JWT_EXPIRY_HOURS: int = 72
     IMAP_SERVER: str = os.getenv("IMAP_SERVER", "imap.gmail.com")
     IMAP_PORT: int = int(os.getenv("IMAP_PORT", "993"))
@@ -1145,7 +1145,7 @@ async def startup():
 # AUTH ROUTES
 # ============================================================================
 @app.post("/api/auth/register")
-async def register(payload: RegisterRequest, request: Request):
+async def register(payload: RegisterRequest, request: Request, response: Response):
     # Block scripted mass-signup: max 5 new accounts per IP per minute.
     enforce_rate_limit(request, "register", max_attempts=5)
     existing = user_get_by_username(payload.username)
@@ -1162,7 +1162,9 @@ async def register(payload: RegisterRequest, request: Request):
     user = user_create(payload.username, payload.email, password_hash, org_id)
     if not user:
         raise HTTPException(status_code=500, detail="Failed to create account")
-    return {"status": "success", "message": "Account created"}
+    token = create_token(user["id"], user["username"])
+    response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=settings.JWT_EXPIRY_HOURS * 3600)
+    return {"status": "success", "message": "Account created", "token": token, "username": user["username"], "user_id": user["id"]}
 
 @app.post("/api/auth/login")
 async def login(payload: LoginRequest, response: Response, request: Request):
@@ -1171,27 +1173,29 @@ async def login(payload: LoginRequest, response: Response, request: Request):
     user = user_get_by_username(payload.username)
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    # Sync user to Supabase if missing there (migrated from pre-Supabase era)
-    sb = db.get_supabase()
-    if sb:
-        try:
-            existing_sb = sb.table("users").select("id").eq("id", user["id"]).execute()
-            if not existing_sb.data:
-                sb.table("users").upsert({
-                    "id": user["id"],
-                    "username": user["username"],
-                    "email": user.get("email", ""),
-                    "password_hash": user["password_hash"],
-                    "role": user.get("role", "member"),
-                    "is_active": True,
-                    "org_id": user.get("org_id"),
-                }).execute()
-                print(f"[SENTINEL] Synced user '{user['username']}' to Supabase", flush=True)
-        except Exception as e:
-            print(f"[SENTINEL] User sync error: {e}", flush=True)
     user_update_last_login(user["id"])
     token = create_token(user["id"], user["username"])
     response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=settings.JWT_EXPIRY_HOURS * 3600)
+    # Fire-and-forget: sync user to Supabase in background so login is fast
+    import threading
+    def _bg_sync():
+        try:
+            sb = db.get_supabase()
+            if sb:
+                existing_sb = sb.table("users").select("id").eq("id", user["id"]).execute()
+                if not existing_sb.data:
+                    sb.table("users").upsert({
+                        "id": user["id"],
+                        "username": user["username"],
+                        "email": user.get("email", ""),
+                        "password_hash": user["password_hash"],
+                        "role": user.get("role", "member"),
+                        "is_active": True,
+                        "org_id": user.get("org_id"),
+                    }).execute()
+        except Exception:
+            pass
+    threading.Thread(target=_bg_sync, daemon=True).start()
     return {"status": "success", "token": token, "username": user["username"], "user_id": user["id"]}
 
 @app.post("/api/auth/logout")
@@ -1537,7 +1541,10 @@ async def accept_invite(token: str, request: Request):
     ok = invite_accept(token, user["user_id"])
     if not ok:
         raise HTTPException(status_code=400, detail="Invalid or expired invite")
-    return {"status": "success"}
+    # Return the user's role so the client can redirect appropriately
+    fresh_user = user_get_by_id(user["user_id"])
+    role = fresh_user.get("role", "member") if fresh_user else "member"
+    return {"status": "success", "role": role}
 
 @app.get("/api/v1/team")
 async def list_team(request: Request):
@@ -4934,7 +4941,8 @@ INVITE_ACCEPT_PAGE = """<!DOCTYPE html>
             }).then(function(r) { return r.json(); }).then(function(data) {
                 if (data.status === 'success') {
                     showSuccess('Invite accepted! Redirecting to dashboard...');
-                    setTimeout(function() { window.location.href = '/dashboard'; }, 1500);
+                    var dest = (data.role === 'friend') ? '/lite/dashboard' : '/dashboard';
+                    setTimeout(function() { window.location.href = dest; }, 1500);
                 } else {
                     showError(data.detail || 'Failed to accept invite. It may have expired.');
                     document.getElementById('login-btn').disabled = false;
