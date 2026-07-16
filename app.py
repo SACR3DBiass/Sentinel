@@ -999,15 +999,36 @@ async def startup():
     print(f"[SENTINEL] Supabase token: {'configured (' + settings.SUPABASE_ACCESS_TOKEN[:10] + '...)' if settings.SUPABASE_ACCESS_TOKEN else 'NOT SET'}", flush=True)
     # Initialize Supabase connection
     db.init_supabase(settings.SUPABASE_URL, settings.SUPABASE_KEY)
-    # Seed owner account if it doesn't exist
+    # Seed owner account — ensure it exists in both SQLite AND Supabase
     try:
+        pw_hash = hash_password("admin")
+        org_id = None
+        if settings.SUPABASE_URL:
+            org_id = db.get_or_create_default_org()
+        fixed_id = "user-abb1c68c218e"
+        # Always upsert owner in Supabase
+        sb = db.get_supabase()
+        if sb:
+            try:
+                existing_sb = sb.table("users").select("id").eq("id", fixed_id).execute()
+                if not existing_sb.data:
+                    sb.table("users").upsert({
+                        "id": fixed_id,
+                        "username": "Biass",
+                        "email": "connorvallance@gmail.com",
+                        "password_hash": pw_hash,
+                        "role": "owner",
+                        "is_active": True,
+                        "org_id": org_id,
+                    }).execute()
+                    print("[SENTINEL] Owner created in Supabase (Biass)", flush=True)
+                else:
+                    sb.table("users").update({"role": "owner"}).eq("id", fixed_id).execute()
+            except Exception as e:
+                print(f"[SENTINEL] Supabase owner seed error: {e}", flush=True)
+        # Also ensure in SQLite
         existing = user_get_by_username("Biass")
         if not existing:
-            pw_hash = hash_password("admin")
-            org_id = None
-            if settings.SUPABASE_URL:
-                org_id = db.get_or_create_default_org()
-            fixed_id = "user-abb1c68c218e"
             user = user_create("Biass", "connorvallance@gmail.com", pw_hash, org_id, user_id=fixed_id)
             if user:
                 import sqlite3 as _s3
@@ -1015,16 +1036,9 @@ async def startup():
                 conn.execute("UPDATE users SET role='owner' WHERE username='Biass'")
                 conn.commit()
                 conn.close()
-                # Also update Supabase if connected
-                sb = db.get_supabase()
-                if sb:
-                    try:
-                        sb.table("users").update({"role": "owner"}).eq("username", "Biass").execute()
-                    except Exception:
-                        pass
-                print("[SENTINEL] Owner account seeded (Biass / admin)", flush=True)
+        print("[SENTINEL] Owner account ready (Biass / admin)", flush=True)
     except Exception as e:
-        print(f"[SENTINEL] Owner seed skipped: {e}", flush=True)
+        print(f"[SENTINEL] Owner seed error: {e}", flush=True)
     print(f"[SENTINEL] Dashboard: http://localhost:8000/dashboard", flush=True)
     if imap_service.is_configured:
         asyncio.create_task(poll_imap_background())
