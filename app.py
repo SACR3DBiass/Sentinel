@@ -113,10 +113,39 @@ def require_auth(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user
 
+_synced_users = set()  # Track users already synced to Supabase this session
+_user_db_cache = {}  # user_id -> (dict, timestamp) - cache user lookups for 60s
+
 def resolve_user_db(user: dict) -> Optional[dict]:
-    user_db = user_get_by_id(user["user_id"])
+    uid = user["user_id"]
+    cached = _user_db_cache.get(uid)
+    if cached and (time.time() - cached[1]) < 60:
+        return cached[0]
+    user_db = user_get_by_id(uid)
     if not user_db:
         user_db = user_get_by_username(user["username"])
+    if user_db:
+        _user_db_cache[uid] = (user_db, time.time())
+    # Auto-sync to Supabase once if only in SQLite
+    if user_db and uid not in _synced_users:
+        _synced_users.add(uid)
+        try:
+            sb = db.get_supabase()
+            if sb:
+                check = sb.table("users").select("id").eq("id", uid).execute()
+                if not check.data:
+                    sb.table("users").upsert({
+                        "id": uid,
+                        "username": user_db["username"],
+                        "email": user_db.get("email", ""),
+                        "password_hash": user_db.get("password_hash", ""),
+                        "role": user_db.get("role", "member"),
+                        "is_active": True,
+                        "org_id": user_db.get("org_id"),
+                    }).execute()
+                    print(f"[SENTINEL] Synced user '{user_db['username']}' to Supabase", flush=True)
+        except Exception:
+            pass
     return user_db
 
 # ============================================================================
@@ -1069,6 +1098,24 @@ async def login(payload: LoginRequest, response: Response):
     user = user_get_by_username(payload.username)
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    # Sync user to Supabase if missing there (migrated from pre-Supabase era)
+    sb = db.get_supabase()
+    if sb:
+        try:
+            existing_sb = sb.table("users").select("id").eq("id", user["id"]).execute()
+            if not existing_sb.data:
+                sb.table("users").upsert({
+                    "id": user["id"],
+                    "username": user["username"],
+                    "email": user.get("email", ""),
+                    "password_hash": user["password_hash"],
+                    "role": user.get("role", "member"),
+                    "is_active": True,
+                    "org_id": user.get("org_id"),
+                }).execute()
+                print(f"[SENTINEL] Synced user '{user['username']}' to Supabase", flush=True)
+        except Exception as e:
+            print(f"[SENTINEL] User sync error: {e}", flush=True)
     user_update_last_login(user["id"])
     token = create_token(user["id"], user["username"])
     response.set_cookie(key="sentinel_token", value=token, httponly=True, samesite="lax", max_age=settings.JWT_EXPIRY_HOURS * 3600)
