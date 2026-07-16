@@ -1476,7 +1476,7 @@ async def list_scan_jobs(request: Request):
 
 class InviteRequest(BaseModel):
     email: str
-    role: str = Field("member")
+    role: str = Field("friend")
 
 @app.post("/api/v1/invites")
 async def create_invite(payload: InviteRequest, request: Request):
@@ -2830,7 +2830,7 @@ LANDING_PAGE = """<!DOCTYPE html>
         <div class="nav-links">
             <a href="/marketing">Product</a>
             <a href="/login">Log In</a>
-            <a href="/register"><button class="btn-primary">Get Started</button></a>
+            <a href="/login"><button class="btn-primary">Get Started</button></a>
         </div>
     </nav>
 
@@ -2841,7 +2841,7 @@ LANDING_PAGE = """<!DOCTYPE html>
             <h1 class="fade-up delay-2">Stop Phishing<br>Before It <span>Strikes</span></h1>
             <p class="fade-up delay-3">Forward suspicious emails and get instant AI-powered verdicts. Detects social engineering, spoofed domains, and credential harvesting with 99.7% accuracy.</p>
             <div class="hero-buttons fade-up delay-4">
-                <a href="/register"><button class="btn-primary">Start Free Trial</button></a>
+                <a href="/login"><button class="btn-primary">Get Started</button></a>
                 <a href="/dashboard"><button class="btn-outline">View Live Demo</button></a>
             </div>
         </div>
@@ -2938,8 +2938,8 @@ LANDING_PAGE = """<!DOCTYPE html>
     <section class="cta">
         <div class="cta-box">
             <h2>Ready to Secure Your Team?</h2>
-            <p>Join SENTINEL and start protecting your organization from phishing attacks today.</p>
-            <a href="/register"><button class="btn-primary" style="padding: 14px 40px; font-size: 16px;">Create Free Account</button></a>
+            <p>SENTINEL protects organizations from phishing attacks with AI-powered analysis.</p>
+            <a href="/login"><button class="btn-primary" style="padding: 14px 40px; font-size: 16px;">Get Started</button></a>
             <div class="cta-badges">
                 <div class="cta-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Your data stays yours</div>
                 <div class="cta-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> End-to-end encrypted</div>
@@ -2952,7 +2952,6 @@ LANDING_PAGE = """<!DOCTYPE html>
         <div class="footer-links">
             <a href="/marketing">Product</a>
             <a href="/login">Log In</a>
-            <a href="/register">Create Account</a>
             <a href="/docs">API Docs</a>
         </div>
     </footer>
@@ -3909,6 +3908,8 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             var inviteEmail = _inviteEmail[0], setInviteEmail = _inviteEmail[1];
             var _inviteLoading = useState(false);
             var inviteLoading = _inviteLoading[0], setInviteLoading = _inviteLoading[1];
+            var _inviteRole = useState('friend');
+            var inviteRole = _inviteRole[0], setInviteRole = _inviteRole[1];
             var _copiedInviteId = useState(null);
             var copiedInviteId = _copiedInviteId[0], setCopiedInviteId = _copiedInviteId[1];
             var _loading = useState(true);
@@ -4040,11 +4041,15 @@ SETTINGS_PAGE = """<!DOCTYPE html>
 
                         React.createElement('div', { style:Object.assign({}, cardStyle, {marginBottom:24}) },
                             React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:12} }, 'Invite Member'),
-                            React.createElement('div', { style:{display:'flex',gap:8} },
-                                React.createElement('input', { value:inviteEmail, onChange:function(e) { setInviteEmail(e.target.value); }, placeholder:'teammate@company.com', style:Object.assign({}, inputStyle, {flex:1}) }),
+                            React.createElement('div', { style:{display:'flex',gap:8,flexWrap:'wrap'} },
+                                React.createElement('input', { value:inviteEmail, onChange:function(e) { setInviteEmail(e.target.value); }, placeholder:'teammate@company.com', style:Object.assign({}, inputStyle, {flex:1,minWidth:200}) }),
+                                React.createElement('select', { value:inviteRole, onChange:function(e) { setInviteRole(e.target.value); }, style:Object.assign({}, inputStyle, {width:120}) },
+                                    React.createElement('option', { value:'friend' }, 'Friend (Lite)'),
+                                    React.createElement('option', { value:'member' }, 'Member (Full)')
+                                ),
                                 React.createElement('button', { disabled:inviteLoading || !inviteEmail, onClick:function() {
                                     setInviteLoading(true);
-                                    API.post('/invites', { email:inviteEmail, role:'member' }).then(function(r) {
+                                    API.post('/invites', { email:inviteEmail, role:inviteRole }).then(function(r) {
                                         showToast('success', 'Invite sent to ' + inviteEmail);
                                         setInviteEmail('');
                                         fetchInvites();
@@ -4401,7 +4406,7 @@ MARKETING_PAGE = """<!DOCTYPE html>
         <div class="nav-links">
             <a href="/">Home</a>
             <a href="/login">Log In</a>
-            <a href="/register"><button class="btn-primary">Get Started</button></a>
+            <a href="/login"><button class="btn-primary">Get Started</button></a>
         </div>
     </nav>
 
@@ -4414,7 +4419,7 @@ MARKETING_PAGE = """<!DOCTYPE html>
             <h1 class="fade-up delay-1">Protect Your Team<br>from <span>Phishing Attacks</span></h1>
             <p class="fade-up delay-2">SENTINEL analyzes suspicious emails in real-time using advanced AI. Get instant verdicts, detailed reasoning, and actionable recommendations to keep your organization safe.</p>
             <div class="hero-buttons fade-up delay-3">
-                <a href="/register"><button class="btn-primary">Start Free Trial</button></a>
+                <a href="/login"><button class="btn-primary">Get Started</button></a>
                 <a href="#demo"><button class="btn-outline">See It In Action</button></a>
             </div>
         </div>
@@ -4599,8 +4604,8 @@ Please confirm your:
     <section class="cta-section">
         <div class="cta-box">
             <h2>Ready to Protect Your Team?</h2>
-            <p>Set up SENTINEL in under 5 minutes. No credit card required.</p>
-            <a href="/register"><button class="btn-primary" style="padding: 14px 40px; font-size: 16px;">Get Started Free</button></a>
+            <p>Set up SENTINEL in under 5 minutes.</p>
+            <a href="/login"><button class="btn-primary" style="padding: 14px 40px; font-size: 16px;">Get Started</button></a>
         </div>
     </section>
 

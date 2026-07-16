@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS public.invites (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id UUID NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE,
     email TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member', 'friend')),
     invited_by TEXT NOT NULL,
     token TEXT UNIQUE NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -264,6 +264,11 @@ EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 -- Add groq_api_key column if missing
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS groq_api_key TEXT DEFAULT '';
+
+DO $$ BEGIN
+    ALTER TABLE public.invites DROP CONSTRAINT IF EXISTS invites_role_check;
+    ALTER TABLE public.invites ADD CONSTRAINT invites_role_check CHECK (role IN ('admin', 'member', 'friend'));
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 -- ============================================================================
 -- RLS: Enable on all tables
