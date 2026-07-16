@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberStart | Your Cybersecurity Journey</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="cyber-grid"></div>
+    
+    <nav class="navbar">
+        <div class="logo">
+            <span class="logo-icon">⚡</span>
+            <span class="logo-text">CyberStart</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="#dashboard" class="nav-link active">Dashboard</a></li>
+            <li><a href="#learning" class="nav-link">Learning Path</a></li>
+            <li><a href="#tools" class="nav-link">Tools</a></li>
+            <li><a href="#practice" class="nav-link">Practice</a></li>
+            <li><a href="#resources" class="nav-link">Resources</a></li>
+        </ul>
+        <div class="hamburger">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section id="dashboard" class="section active">
+            <div class="hero">
+                <h1 class="glitch" data-text="Welcome to CyberStart">Welcome to CyberStart</h1>
+                <p class="subtitle">Your comprehensive cybersecurity learning platform</p>
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <span class="stat-number" data-count="0">0</span>
+                        <span class="stat-label">Completed Lessons</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" data-count="0">0</span>
+                        <span class="stat-label">Skills Earned</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-number" data-count="0">0</span>
+                        <span class="stat-label">Challenges Done</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quick-start">
+                <h2>Quick Start Guide</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <h3>Learn the Basics</h3>
+                        <p>Start with networking fundamentals and security concepts</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <h3>Set Up Your Lab</h3>
+                        <p>Create a safe environment to practice your skills</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <h3>Practice Daily</h3>
+                        <p>Use hands-on exercises to build real skills</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <h3>Join the Community</h3>
+                        <p>Connect with others and participate in CTFs</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="learning" class="section">
+            <h2 class="section-title">Learning Path</h2>
+            <div class="learning-paths">
+                <div class="path-card beginner">
+                    <div class="path-header">
+                        <span class="path-icon">🌱</span>
+                        <h3>Beginner</h3>
+                        <span class="path-progress">0%</span>
+                    </div>
+                    <ul class="path-content">
+                        <li data-lesson="1">
+                            <span class="lesson-status"></span>
+                            <span>Introduction to Cybersecurity</span>
+                            <span class="lesson-time">15 min</span>
+                        </li>
+                        <li data-lesson="2">
+                            <span class="lesson-status"></span>
+                            <span>Networking Fundamentals</span>
+                            <span class="lesson-time">45 min</span>
+                        </li>
+                        <li data-lesson="3">
+                            <span class="lesson-status"></span>
+                            <span>Operating System Basics</span>
+                            <span class="lesson-time">30 min</span>
+                        </li>
+                        <li data-lesson="4">
+                            <span class="lesson-status"></span>
+                            <span>Security Principles</span>
+                            <span class="lesson-time">25 min</span>
+                        </li>
+                        <li data-lesson="5">
+                            <span class="lesson-status"></span>
+                            <span>Common Threats & Attacks</span>
+                            <span class="lesson-time">35 min</span>
+                        </li>
+                    </ul>
+                    <button class="path-btn" onclick="startLearningPath('beginner')">Start Learning</button>
+                </div>
+
+                <div class="path-card intermediate">
+                    <div class="path-header">
+                        <span class="path-icon">🔥</span>
+                        <h3>Intermediate</h3>
+                        <span class="path-progress">0%</span>
+                    </div>
+                    <ul class="path-content">
+                        <li data-lesson="6">
+                            <span class="lesson-status"></span>
+                            <span>Linux Command Line</span>
+                            <span class="lesson-time">60 min</span>
+                        </li>
+                        <li data-lesson="7">
+                            <span class="lesson-status"></span>
+                            <span>Web Application Security</span>
+                            <span class="lesson-time">90 min</span>
+                        </li>
+                        <li data-lesson="8">
+                            <span class="lesson-status"></span>
+                            <span>Network Security</span>
+                            <span class="lesson-time">75 min</span>
+                        </li>
+                        <li data-lesson="9">
+                            <span class="lesson-status"></span>
+                            <span>Cryptography Basics</span>
+                            <span class="lesson-time">50 min</span>
+                        </li>
+                        <li data-lesson="10">
+                            <span class="lesson-status"></span>
+                            <span>Introduction to Pentesting</span>
+                            <span class="lesson-time">80 min</span>
+                        </li>
+                    </ul>
+                    <button class="path-btn" onclick="startLearningPath('intermediate')">Start Learning</button>
+                </div>
+
+                <div class="path-card advanced">
+                    <div class="path-header">
+                        <span class="path-icon">💎</span>
+                        <h3>Advanced</h3>
+                        <span class="path-progress">0%</span>
+                    </div>
+                    <ul class="path-content">
+                        <li data-lesson="11">
+                            <span class="lesson-status"></span>
+                            <span>Vulnerability Assessment</span>
+                            <span class="lesson-time">120 min</span>
+                        </li>
+                        <li data-lesson="12">
+                            <span class="lesson-status"></span>
+                            <span>Penetration Testing</span>
+                            <span class="lesson-time">180 min</span>
+                        </li>
+                        <li data-lesson="13">
+                            <span class="lesson-status"></span>
+                            <span>Incident Response</span>
+                            <span class="lesson-time">90 min</span>
+                        </li>
+                        <li data-lesson="14">
+                            <span class="lesson-status"></span>
+                            <span>Malware Analysis</span>
+                            <span class="lesson-time">150 min</span>
+                        </li>
+                        <li data-lesson="15">
+                            <span class="lesson-status"></span>
+                            <span>Advanced Exploitation</span>
+                            <span class="lesson-time">200 min</span>
+                        </li>
+                    </ul>
+                    <button class="path-btn" onclick="startLearningPath('advanced')">Start Learning</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="tools" class="section">
+            <h2 class="section-title">Essential Tools</h2>
+            <div class="tools-filter">
+                <button class="filter-btn active" data-category="all">All</button>
+                <button class="filter-btn" data-category="network">Network</button>
+                <button class="filter-btn" data-category="web">Web</button>
+                <button class="filter-btn" data-category="forensics">Forensics</button>
+                <button class="filter-btn" data-category="crypto">Crypto</button>
+            </div>
+            <div class="tools-grid">
+                <div class="tool-card" data-category="network">
+                    <div class="tool-icon">🔍</div>
+                    <h3>Wireshark</h3>
+                    <p>Network protocol analyzer for packet inspection and analysis</p>
+                    <div class="tool-tags">
+                        <span class="tag">Free</span>
+                        <span class="tag">Windows</span>
+                        <span class="tag">Linux</span>
+                    </div>
+                    <a href="https://www.wireshark.org/" target="_blank" class="tool-link">Download</a>
+                </div>
+                <div class="tool-card" data-category="network">
+                    <div class="tool-icon">📡</div>
+                    <h3>Nmap</h3>
+                    <p>Network discovery and security auditing tool</p>
+                    <div class="tool-tags">
+                        <span class="tag">Free</span>
+                        <span class="tag">All OS</span>
+                    </div>
+                    <a href="https://nmap.org/" target="_blank" class="tool-link">Download</a>
+                </div>
+                <div class="tool-card" data-category="web">
+                    <div class="tool-icon">🕷️</div>
+                    <h3>Burp Suite</h3>
+                    <p>Web vulnerability scanner and testing proxy</p>
+                    <div class="tool-tags">
+                        <span class="tag">Free/Paid</span>
+                        <span class="tag">All OS</span>
+                    </div>
+                    <a href="https://portswigger.net/burp" target="_blank" class="tool-link">Download</a>
+                </div>
+                <div class="tool-card" data-category="web">
+                    <div class="tool-icon">🔓</div>
+                    <h3>OWASP ZAP</h3>
+                    <p>Free web application security scanner</p>
+                    <div class="tool-tags">
+                        <span class="tag">Free</span>
+                        <span class="tag">All OS</span>
+                    </div>
+                    <a href="https://www.zaproxy.org/" target="_blank" class="tool-link">Download</a>
+                </div>
+                <div class="tool-card" data-category="forensics">
+                    <div class="tool-icon">🔬</div>
+                    <h3>Autopsy</h3>
+                    <p>Digital forensics platform for disk analysis</p>
+                    <div class="tool-tags">
+                        <span class="tag">Free</span>
+                        <span class="tag">Windows</span>
+                        <span class="tag">Linux</span>
+                    </div>
+                    <a href="https://www.autopsy.com/" target="_blank" class="tool-link">Download</a>
+                </div>
+                <div class="tool-card" data-category="crypto">
+                    <div class="tool-icon">🔐</div>
+                    <h3>Hashcat</h3>
+                    <p>Advanced password recovery utility</p>
+                    <div class="tool-tags">
+                        <span class="tag">Free</span>
+                        <span class="tag">All OS</span>
+                    </div>
+                    <a href="https://hashcat.net/hashcat/" target="_blank" class="tool-link">Download</a>
+                </div>
+                <div class="tool-card" data-category="network">
+                    <div class="tool-icon">📶</div>
+                    <h3>Aircrack-ng</h3>
+                    <p>WiFi security assessment tools suite</p>
+                    <div class="tool-tags">
+                        <span class="tag">Free</span>
+                        <span class="tag">Linux</span>
+                    </div>
+                    <a href="https://www.aircrack-ng.org/" target="_blank" class="tool-link">Download</a>
+                </div>
+                <div class="tool-card" data-category="forensics">
+                    <div class="tool-icon">💾</div>
+                    <h3>Volatility</h3>
+                    <p>Memory forensics framework for RAM analysis</p>
+                    <div class="tool-tags">
+                        <span class="tag">Free</span>
+                        <span class="tag">All OS</span>
+                    </div>
+                    <a href="https://www.volatilityfoundation.org/" target="_blank" class="tool-link">Download</a>
+                </div>
+            </div>
+        </section>
+
+        <section id="practice" class="section">
+            <h2 class="section-title">Practice Lab</h2>
+            <div class="practice-container">
+                <div class="terminal">
+                    <div class="terminal-header">
+                        <span class="terminal-dot red"></span>
+                        <span class="terminal-dot yellow"></span>
+                        <span class="terminal-dot green"></span>
+                        <span class="terminal-title">CyberStart Terminal</span>
+                    </div>
+                    <div class="terminal-body" id="terminal-output">
+                        <div class="terminal-line">Welcome to CyberStart Terminal</div>
+                        <div class="terminal-line">Type 'help' to see available commands</div>
+                        <div class="terminal-line prompt">></div>
+                    </div>
+                    <div class="terminal-input-container">
+                        <span class="terminal-prompt">></span>
+                        <input type="text" id="terminal-input" class="terminal-input" autofocus>
+                    </div>
+                </div>
+
+                <div class="challenges-panel">
+                    <h3>Quick Challenges</h3>
+                    <div class="challenge-list">
+                        <div class="challenge-item" onclick="startChallenge('base64')">
+                            <span class="challenge-difficulty easy">Easy</span>
+                            <span class="challenge-title">Base64 Decode</span>
+                            <span class="challenge-points">+10 XP</span>
+                        </div>
+                        <div class="challenge-item" onclick="startChallenge('hash')">
+                            <span class="challenge-difficulty easy">Easy</span>
+                            <span class="challenge-title">Identify Hash Type</span>
+                            <span class="challenge-points">+15 XP</span>
+                        </div>
+                        <div class="challenge-item" onclick="startChallenge('xor')">
+                            <span class="challenge-difficulty medium">Medium</span>
+                            <span class="challenge-title">XOR Cipher</span>
+                            <span class="challenge-points">+25 XP</span>
+                        </div>
+                        <div class="challenge-item" onclick="startChallenge('stego')">
+                            <span class="challenge-difficulty medium">Medium</span>
+                            <span class="challenge-title">Steganography</span>
+                            <span class="challenge-points">+30 XP</span>
+                        </div>
+                        <div class="challenge-item" onclick="startChallenge('forensics')">
+                            <span class="challenge-difficulty hard">Hard</span>
+                            <span class="challenge-title">Memory Forensics</span>
+                            <span class="challenge-points">+50 XP</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mini-tools">
+                <h3>Browser-Based Tools</h3>
+                <div class="mini-tools-grid">
+                    <div class="mini-tool">
+                        <h4>Base64 Encoder/Decoder</h4>
+                        <textarea id="base64-input" placeholder="Enter text to encode/decode..."></textarea>
+                        <div class="mini-tool-btns">
+                            <button onclick="base64Encode()">Encode</button>
+                            <button onclick="base64Decode()">Decode</button>
+                        </div>
+                        <div id="base64-output" class="tool-output"></div>
+                    </div>
+                    <div class="mini-tool">
+                        <h4>MD5/SHA Hash Generator</h4>
+                        <textarea id="hash-input" placeholder="Enter text to hash..."></textarea>
+                        <div class="mini-tool-btns">
+                            <button onclick="generateHash('MD5')">MD5</button>
+                            <button onclick="generateHash('SHA-1')">SHA-1</button>
+                            <button onclick="generateHash('SHA-256')">SHA-256</button>
+                        </div>
+                        <div id="hash-output" class="tool-output"></div>
+                    </div>
+                    <div class="mini-tool">
+                        <h4>URL Encoder/Decoder</h4>
+                        <textarea id="url-input" placeholder="Enter URL to encode/decode..."></textarea>
+                        <div class="mini-tool-btns">
+                            <button onclick="urlEncode()">Encode</button>
+                            <button onclick="urlDecode()">Decode</button>
+                        </div>
+                        <div id="url-output" class="tool-output"></div>
+                    </div>
+                    <div class="mini-tool">
+                        <h4>Hex Converter</h4>
+                        <textarea id="hex-input" placeholder="Enter text or hex value..."></textarea>
+                        <div class="mini-tool-btns">
+                            <button onclick="textToHex()">Text → Hex</button>
+                            <button onclick="hexToText()">Hex → Text</button>
+                        </div>
+                        <div id="hex-output" class="tool-output"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="resources" class="section">
+            <h2 class="section-title">Learning Resources</h2>
+            <div class="resources-container">
+                <div class="resource-category">
+                    <h3>📚 Certifications</h3>
+                    <div class="resource-list">
+                        <a href="https://www.comptia.org/certifications/security" target="_blank" class="resource-item">
+                            <span class="resource-title">CompTIA Security+</span>
+                            <span class="resource-desc">Entry-level security certification</span>
+                        </a>
+                        <a href="https://www.offensive-security.com/pentesting-oscp/" target="_blank" class="resource-item">
+                            <span class="resource-title">OSCP</span>
+                            <span class="resource-desc">Offensive Security Certified Professional</span>
+                        </a>
+                        <a href="https://www.eccouncil.org/programs/certified-ethical-hacker-ceh/" target="_blank" class="resource-item">
+                            <span class="resource-title">CEH</span>
+                            <span class="resource-desc">Certified Ethical Hacker</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="resource-category">
+                    <h3>🎓 Free Learning Platforms</h3>
+                    <div class="resource-list">
+                        <a href="https://www.cybrary.it/" target="_blank" class="resource-item">
+                            <span class="resource-title">Cybrary</span>
+                            <span class="resource-desc">Free cybersecurity courses</span>
+                        </a>
+                        <a href="https://www.hackthebox.com/" target="_blank" class="resource-item">
+                            <span class="resource-title">Hack The Box</span>
+                            <span class="resource-desc">Penetration testing labs</span>
+                        </a>
+                        <a href="https://tryhackme.com/" target="_blank" class="resource-item">
+                            <span class="resource-title">TryHackMe</span>
+                            <span class="resource-desc">Guided cybersecurity learning</span>
+                        </a>
+                        <a href="https://picoctf.org/" target="_blank" class="resource-item">
+                            <span class="resource-title">PicoCTF</span>
+                            <span class="resource-desc">CTF for beginners</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="resource-category">
+                    <h3>📖 Books</h3>
+                    <div class="resource-list">
+                        <div class="resource-item">
+                            <span class="resource-title">The Web Application Hacker's Handbook</span>
+                            <span class="resource-desc">Essential for web security</span>
+                        </div>
+                        <div class="resource-item">
+                            <span class="resource-title">Hacking: The Art of Exploitation</span>
+                            <span class="resource-desc">Understanding exploitation</span>
+                        </div>
+                        <div class="resource-item">
+                            <span class="resource-title">Red Team Field Manual</span>
+                            <span class="resource-desc">Quick reference guide</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="resource-category">
+                    <h3>🎥 YouTube Channels</h3>
+                    <div class="resource-list">
+                        <a href="https://www.youtube.com/c/NetworkChuck" target="_blank" class="resource-item">
+                            <span class="resource-title">NetworkChuck</span>
+                            <span class="resource-desc">Networking and security</span>
+                        </a>
+                        <a href="https://www.youtube.com/c/TheCyberMentor" target="_blank" class="resource-item">
+                            <span class="resource-title">The Cyber Mentor</span>
+                            <span class="resource-desc">Ethical hacking tutorials</span>
+                        </a>
+                        <a href="https://www.youtube.com/c/ProfessorMesser" target="_blank" class="resource-item">
+                            <span class="resource-title">Professor Messer</span>
+                            <span class="resource-desc">CompTIA certification prep</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div class="modal" id="lesson-modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div id="modal-body">
+                <h2>Lesson Title</h2>
+                <div class="lesson-content">
+                    <p>Lesson content goes here...</p>
+                </div>
+                <div class="lesson-actions">
+                    <button class="btn-secondary" onclick="prevLesson()">Previous</button>
+                    <button class="btn-primary" onclick="completeLesson()">Complete & Continue</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
