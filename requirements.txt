@@ -11,3 +11,4 @@ groq
 bcrypt
 PyJWT
 reportlab
+supabase
