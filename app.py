@@ -42,7 +42,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 class Settings:
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "") or "https://qnrdduwczpexihzhpuhq.supabase.co"
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
     SUPABASE_ACCESS_TOKEN: str = os.getenv("SUPABASE_ACCESS_TOKEN", "")
     WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "dev-secret-change-in-production")
