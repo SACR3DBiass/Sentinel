@@ -2353,8 +2353,7 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
         </div>
         <div class="topbar-right">
             <button class="hamburger" onclick="document.querySelector('.nav').classList.toggle('open')">&#9776;</button>
-            <a href="/dashboard" class="btn ghost">Dashboard</a>
-            <a href="/login" class="btn" onclick="event.preventDefault(); logout()">Logout</a>
+            <a href="/login" class="btn ghost" onclick="event.preventDefault(); logout()">Logout</a>
         </div>
     </div>
 
