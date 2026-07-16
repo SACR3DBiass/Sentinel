@@ -997,9 +997,6 @@ async def startup():
     print(f"[SENTINEL] Supabase URL: {settings.SUPABASE_URL[:30] + '...' if settings.SUPABASE_URL else 'NOT SET'}", flush=True)
     print(f"[SENTINEL] Supabase key: {settings.SUPABASE_KEY[:15] + '...' if settings.SUPABASE_KEY else 'NOT SET'}", flush=True)
     print(f"[SENTINEL] Supabase token: {'configured (' + settings.SUPABASE_ACCESS_TOKEN[:10] + '...)' if settings.SUPABASE_ACCESS_TOKEN else 'NOT SET'}", flush=True)
-    # Debug: print raw env vars
-    raw_url = os.environ.get("SUPABASE_URL", "<MISSING>")
-    print(f"[SENTINEL] DEBUG os.environ SUPABASE_URL = '{raw_url}'", flush=True)
     # Initialize Supabase connection
     db.init_supabase(settings.SUPABASE_URL, settings.SUPABASE_KEY)
     # Seed owner account if it doesn't exist
