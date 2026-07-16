@@ -34,6 +34,7 @@ import jwt
 from dotenv import load_dotenv
 import db
 from report import generate_monthly_report_pdf
+from lite import app as lite_app
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -1040,6 +1041,8 @@ app.add_middleware(
 )
 app.add_middleware(RequestLoggingMiddleware)
 
+app.mount("/lite", lite_app)
+
 analyzer = GroqAnalyzer()
 imap_service = IMAPEmailService()
 
@@ -1567,7 +1570,7 @@ async def remove_team_member(member_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Member not found")
     if target.get("org_id") != user_db.get("org_id"):
         raise HTTPException(status_code=403, detail="Member not in your organization")
-    sb = get_supabase()
+    sb = db.get_supabase()
     if sb:
         try:
             sb.table("users").update({"org_id": None, "role": "member"}).eq("id", member_id).execute()
@@ -1576,7 +1579,7 @@ async def remove_team_member(member_id: str, request: Request):
             pass
     # local fallback
     try:
-        conn = sqlite3.connect(_local_db_path())
+        conn = sqlite3.connect(os.path.join(db.DATA_DIR, "users.db"))
         c = conn.cursor()
         c.execute("UPDATE users SET org_id = NULL, role = 'member' WHERE user_id = ?", (member_id,))
         conn.commit()
@@ -2289,11 +2292,21 @@ async def page_register():
     return REGISTER_PAGE
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def page_dashboard():
+async def page_dashboard(request: Request):
+    user = get_current_user(request)
+    if user:
+        user_db = resolve_user_db(user)
+        if user_db and user_db.get("role") == "friend":
+            return RedirectResponse("/lite/dashboard")
     return DASHBOARD_PAGE
 
 @app.get("/settings", response_class=HTMLResponse)
-async def page_settings():
+async def page_settings(request: Request):
+    user = get_current_user(request)
+    if user:
+        user_db = resolve_user_db(user)
+        if user_db and user_db.get("role") == "friend":
+            return RedirectResponse("/lite/dashboard")
     return SETTINGS_PAGE
 
 @app.get("/accept-invite/{token}", response_class=HTMLResponse)
@@ -2305,7 +2318,12 @@ async def page_marketing():
     return MARKETING_PAGE
 
 @app.get("/analytics", response_class=HTMLResponse)
-async def page_analytics():
+async def page_analytics(request: Request):
+    user = get_current_user(request)
+    if user:
+        user_db = resolve_user_db(user)
+        if user_db and user_db.get("role") == "friend":
+            return RedirectResponse("/lite/dashboard")
     return ANALYTICS_PAGE
 
 @app.get("/", response_class=HTMLResponse)

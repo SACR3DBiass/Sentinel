@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     org_id UUID REFERENCES public.organizations(id) ON DELETE SET NULL,
-    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member', 'friend')),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     last_login TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -253,6 +253,17 @@ CREATE TABLE IF NOT EXISTS public.request_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_request_logs_created ON public.request_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_request_logs_ip ON public.request_logs(ip_address);
+
+-- ============================================================================
+-- MIGRATION: Add 'friend' role to users CHECK constraint (existing deployments)
+-- ============================================================================
+DO $$ BEGIN
+    ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
+    ALTER TABLE public.users ADD CONSTRAINT users_role_check CHECK (role IN ('owner', 'admin', 'member', 'friend'));
+EXCEPTION WHEN OTHERS THEN NULL; END $$;
+
+-- Add groq_api_key column if missing
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS groq_api_key TEXT DEFAULT '';
 
 -- ============================================================================
 -- RLS: Enable on all tables
@@ -531,6 +542,23 @@ def user_get_by_email(email: str) -> Optional[dict]:
         except Exception:
             return None
     return None
+
+def user_set_role(user_id: str, role: str) -> bool:
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("users").update({"role": role}).eq("id", user_id).execute()
+            return True
+        except Exception as e:
+            print(f"[SENTINEL] user_set_role (Supabase) failed: {e}", flush=True)
+    try:
+        conn = _get_users_db()
+        conn.execute("UPDATE users SET role=? WHERE id=?", (role, user_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        return False
 
 def user_update_last_login(user_id: str):
     sb = get_supabase()
@@ -1398,7 +1426,7 @@ def _init_users_db():
         password_hash TEXT NOT NULL, created_at TEXT NOT NULL
     )""")
     for col, default in [
-        ("role", "'member'"), ("org_id", "NULL"), ("is_active", "1"), ("last_login", "NULL"),
+        ("role", "'member'"), ("org_id", "NULL"), ("is_active", "1"), ("last_login", "NULL"), ("groq_api_key", "NULL"),
     ]:
         # Defense-in-depth: these are hardcoded, but never build DDL from an
         # identifier that isn't a plain [a-z_] name (blocks SQL injection if this
@@ -1889,3 +1917,42 @@ def request_log_unique_ips(days: int = 7) -> List[dict]:
             seen[ip]["last_seen"] = ts
 
     return sorted(seen.values(), key=lambda x: -x["request_count"])
+
+# ============================================================================
+# PER-USER GROQ API KEY STORAGE (for Lite/MVP)
+# ============================================================================
+
+def user_groq_key_save(user_id: str, api_key: str) -> bool:
+    """Save a per-user Groq API key."""
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("users").update({"groq_api_key": api_key}).eq("id", user_id).execute()
+            return True
+        except Exception:
+            pass
+    # Local fallback: save to JSON
+    key_file = os.path.join(DATA_DIR, user_id, "groq_key.json")
+    os.makedirs(os.path.dirname(key_file), exist_ok=True)
+    with open(key_file, "w") as f:
+        json.dump({"api_key": api_key}, f)
+    return True
+
+def user_groq_key_get(user_id: str) -> str:
+    """Get a per-user Groq API key. Returns empty string if not set."""
+    sb = get_supabase()
+    if sb:
+        try:
+            result = sb.table("users").select("groq_api_key").eq("id", user_id).execute()
+            if result.data and result.data[0].get("groq_api_key"):
+                return result.data[0]["groq_api_key"]
+        except Exception:
+            pass
+    # Local fallback
+    key_file = os.path.join(DATA_DIR, user_id, "groq_key.json")
+    try:
+        with open(key_file, "r") as f:
+            data = json.load(f)
+            return data.get("api_key", "")
+    except Exception:
+        return ""
