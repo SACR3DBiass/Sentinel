@@ -992,7 +992,11 @@ async def poll_imap_background():
 
 @app.on_event("startup")
 async def startup():
-    print(f"[SENTINEL] Server starting - Groq API: {'configured' if settings.GROQ_API_KEY else 'NOT configured'}", flush=True)
+    print(f"[SENTINEL] Server starting", flush=True)
+    print(f"[SENTINEL] Groq API key: {'configured (' + settings.GROQ_API_KEY[:10] + '...)' if settings.GROQ_API_KEY else 'NOT SET'}", flush=True)
+    print(f"[SENTINEL] Supabase URL: {settings.SUPABASE_URL[:30] + '...' if settings.SUPABASE_URL else 'NOT SET'}", flush=True)
+    print(f"[SENTINEL] Supabase key: {settings.SUPABASE_KEY[:15] + '...' if settings.SUPABASE_KEY else 'NOT SET'}", flush=True)
+    print(f"[SENTINEL] Supabase token: {'configured (' + settings.SUPABASE_ACCESS_TOKEN[:10] + '...)' if settings.SUPABASE_ACCESS_TOKEN else 'NOT SET'}", flush=True)
     # Initialize Supabase connection
     db.init_supabase(settings.SUPABASE_URL, settings.SUPABASE_KEY)
     # Seed owner account if it doesn't exist
