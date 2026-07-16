@@ -10,3 +10,4 @@ httpx
 groq
 bcrypt
 PyJWT
+reportlab

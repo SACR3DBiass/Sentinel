@@ -1288,7 +1288,11 @@ async def _run_imap_scan(job_id: str, conn_data: dict):
                 meta_batch.append({"text_body": text_body})
             except Exception as e:
                 print(f"[SENTINEL] IMAP scan email error: {e}", flush=True)
-        mail.logout()
+            time.sleep(0.3)
+        try:
+            mail.logout()
+        except Exception:
+            pass
         for batch_start in range(0, len(parsed_batch), BATCH_SIZE):
             batch = parsed_batch[batch_start:batch_start + BATCH_SIZE]
             meta = meta_batch[batch_start:batch_start + BATCH_SIZE]
@@ -1697,10 +1701,12 @@ async def imap_check(request: Request):
             mail = _imap.IMAP4_SSL(conn_full["imap_host"], conn_full["imap_port"])
             mail.login(conn_full["imap_username"], conn_full["imap_password_enc"])
             mail.select(conn_full.get("imap_folder", "INBOX"))
-            _, msg_nums = mail.search(None, "ALL")
+            _, msg_nums = mail.search(None, "UNSEEN")
             email_ids = msg_nums[0].split() if msg_nums[0] else []
-            print(f"[SENTINEL] imap/check ALL found {len(email_ids)} emails in {conn.get('label')}", flush=True)
-            emails_to_scan = email_ids[-50:]
+            total_unread = len(email_ids)
+            MAX_PER_SCAN = 100
+            emails_to_scan = email_ids[-MAX_PER_SCAN:] if total_unread > MAX_PER_SCAN else email_ids
+            print(f"[SENTINEL] imap/check UNSEEN found {total_unread} unread, scanning {len(emails_to_scan)} in {conn.get('label')}", flush=True)
             skipped = 0
             parsed_batch = []
             meta_batch = []
@@ -1740,7 +1746,11 @@ async def imap_check(request: Request):
                     meta_batch.append({"text_body": text_body, "eid": eid})
                 except Exception as e:
                     print(f"[SENTINEL] imap/check email parse error: {e}", flush=True)
-            mail.logout()
+                time.sleep(0.3)
+            try:
+                mail.logout()
+            except Exception:
+                pass
             print(f"[SENTINEL] imap/check {conn.get('label')}: {len(parsed_batch)} new, {skipped} skipped", flush=True)
             for batch_start in range(0, len(parsed_batch), BATCH_SIZE):
                 batch = parsed_batch[batch_start:batch_start + BATCH_SIZE]
