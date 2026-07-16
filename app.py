@@ -2175,19 +2175,25 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
         .nav { display: flex; gap: 6px; }
         .nav a { padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; color: #888; transition: all 0.2s; }
         .nav a:hover, .nav a.active { color: #f5f5f5; background: rgba(255,255,255,0.05); }
-        .topbar-right { display: flex; align-items: center; gap: 12px; }
+        .topbar-right { display: flex; align-items: center; gap: 8px; }
+        .topbar-right .btn { padding: 7px 14px; font-size: 12px; border-radius: 6px; }
         .owner-badge { background: linear-gradient(135deg, #DC2626, #991B1B); color: white; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
         .main { padding: 80px 32px 32px; max-width: 1400px; margin: 0 auto; }
         .page-header { margin-bottom: 16px; }
         .page-header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
         .page-header p { color: #888; font-size: 14px; }
         .controls { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-        .controls select, .controls input { background: #161616; border: 1px solid #2a2a2a; color: #f5f5f5; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-family: inherit; }
-        .controls select:focus, .controls input:focus { outline: none; border-color: #DC2626; }
-        .btn { background: #161616; border: 1px solid #2a2a2a; color: #f5f5f5; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; }
-        .btn:hover { border-color: #555; background: #1e1e1e; }
-        .btn.primary { background: linear-gradient(135deg, #DC2626, #991B1B); border: 1px solid rgba(220,38,38,0.3); }
-        .btn.primary:hover { box-shadow: 0 4px 20px rgba(220,38,38,0.3); }
+        .controls select, .controls input { background: #111; border: 1px solid #2a2a2a; color: #f5f5f5; padding: 9px 32px 9px 14px; border-radius: 8px; font-size: 13px; font-family: inherit; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%23888' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; cursor: pointer; transition: border-color 0.2s; }
+        .controls select:hover, .controls input:hover { border-color: #444; }
+        .controls select:focus, .controls input:focus { outline: none; border-color: #DC2626; box-shadow: 0 0 0 2px rgba(220,38,38,0.15); }
+        .btn { background: #111; border: 1px solid #2a2a2a; color: #ccc; padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+        .btn:hover { border-color: #444; background: #1a1a1a; color: #f5f5f5; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .btn.primary { background: linear-gradient(135deg, #DC2626, #B91C1C); border: 1px solid rgba(220,38,38,0.4); color: white; font-weight: 600; }
+        .btn.primary:hover { box-shadow: 0 4px 20px rgba(220,38,38,0.35); border-color: rgba(220,38,38,0.6); }
+        .btn.ghost { background: transparent; border: 1px solid #2a2a2a; color: #aaa; }
+        .btn.ghost:hover { background: #1a1a1a; border-color: #444; color: #f5f5f5; }
+        .btn-icon { padding: 9px 12px; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .stat-card { background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 14px 16px; }
         .stat-card .label { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
@@ -2229,7 +2235,7 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
             .page-header h1 { font-size: 22px; }
             .controls { flex-direction: column; align-items: stretch; gap: 8px; }
             .controls select, .controls input { width: 100%; }
-            .controls span { margin-left: 0 !important; }
+            .controls span { margin-left: 0 !important; justify-content: center; }
             .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
             .stat-card { padding: 10px 12px; }
             .stat-card .value { font-size: 18px; }
@@ -2258,7 +2264,7 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
         </div>
         <div class="topbar-right">
             <button class="hamburger" onclick="document.querySelector('.nav').classList.toggle('open')">&#9776;</button>
-            <a href="/dashboard" class="btn">Dashboard</a>
+            <a href="/dashboard" class="btn ghost">Dashboard</a>
             <a href="/login" class="btn" onclick="event.preventDefault(); logout()">Logout</a>
         </div>
     </div>
@@ -2276,8 +2282,11 @@ ANALYTICS_PAGE = """<!DOCTYPE html>
                 <option value="30">Last 30 Days</option>
                 <option value="90">Last 90 Days</option>
             </select>
-            <button class="btn primary" onclick="loadAnalytics()">Refresh</button>
-            <span style="margin-left: auto; font-size: 13px; color: #888;"><span class="live-dot"></span>Live tracking active</span>
+            <button class="btn primary" onclick="loadAnalytics()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Refresh
+            </button>
+            <span style="margin-left: auto; font-size: 13px; color: #888; display: flex; align-items: center; gap: 6px;"><span class="live-dot"></span>Live tracking active</span>
         </div>
 
         <div id="loading" class="loading">Loading analytics...</div>
