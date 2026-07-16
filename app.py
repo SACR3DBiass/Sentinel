@@ -1296,7 +1296,7 @@ async def _run_imap_scan(job_id: str, conn_data: dict):
         _, msg_nums = mail.search(None, "UNSEEN")
         email_ids = msg_nums[0].split() if msg_nums[0] else []
         total_unread = len(email_ids)
-        MAX_PER_SCAN = 100
+        MAX_PER_SCAN = 50
         emails_to_scan = email_ids[-MAX_PER_SCAN:] if total_unread > MAX_PER_SCAN else email_ids
         print(f"[SENTINEL] per-user scan found {total_unread} unread, scanning {len(emails_to_scan)} for {conn_data.get('imap_username')}", flush=True)
         existing = store_get(conn_data["user_id"])
@@ -1769,7 +1769,7 @@ async def imap_check(request: Request):
             _, msg_nums = mail.search(None, "UNSEEN")
             email_ids = msg_nums[0].split() if msg_nums[0] else []
             total_unread = len(email_ids)
-            MAX_PER_SCAN = 100
+            MAX_PER_SCAN = 50
             emails_to_scan = email_ids[-MAX_PER_SCAN:] if total_unread > MAX_PER_SCAN else email_ids
             print(f"[SENTINEL] imap/check UNSEEN found {total_unread} unread, scanning {len(emails_to_scan)} in {conn.get('label')}", flush=True)
             skipped = 0

@@ -1361,12 +1361,6 @@ def _save_user_store(user_id: str, store: Dict[str, dict]):
         print(f"[SENTINEL] Failed to save data for user {user_id}: {e}", flush=True)
 
 def store_get(user_id: str) -> Dict[str, dict]:
-    if is_supabase_available():
-        try:
-            rows = report_list(user_id=user_id)
-            return {r["id"]: r for r in rows}
-        except Exception:
-            pass
     return _load_user_store(user_id)
 
 def store_set(user_id: str, email_id: str, record: dict):
@@ -1748,11 +1742,10 @@ def request_log_save(ip: str, path: str, method: str, user_agent: str,
     if sb:
         try:
             sb.table("request_logs").insert({
-                "ip": ip, "path": path, "method": method, "user_agent": user_agent,
+                "ip_address": ip, "path": path, "method": method, "user_agent": user_agent,
                 "country": country, "region": region, "city": city,
                 "device_type": device_type, "browser": browser, "os": os_name,
                 "user_id": user_id, "username": username,
-                "response_status": response_status,
                 "created_at": datetime.utcnow().isoformat(),
             }).execute()
             return
@@ -1792,7 +1785,7 @@ def request_log_stats(days: int = 30) -> dict:
             data = []
 
     total = len(data)
-    unique_ips = len(set(r.get("ip", "") for r in data))
+    unique_ips = len(set(r.get("ip_address", r.get("ip", "")) for r in data))
     unique_users = len(set(r.get("user_id", "") for r in data if r.get("user_id")))
 
     countries = {}
@@ -1852,7 +1845,7 @@ def request_log_unique_ips(days: int = 7) -> List[dict]:
     since = (datetime.utcnow() - timedelta(days=days)).isoformat()
     if sb:
         try:
-            rows = sb.table("request_logs").select("ip,country,region,city,device_type,browser,os,created_at").gte("created_at", since).execute()
+            rows = sb.table("request_logs").select("ip_address,country,region,city,device_type,browser,os,created_at").gte("created_at", since).execute()
             data = rows.data or []
         except Exception:
             data = []
@@ -1868,7 +1861,7 @@ def request_log_unique_ips(days: int = 7) -> List[dict]:
 
     seen = {}
     for r in data:
-        ip = r.get("ip", "")
+        ip = r.get("ip_address", r.get("ip", ""))
         if ip not in seen:
             seen[ip] = {
                 "ip": ip,
