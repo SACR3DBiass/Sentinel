@@ -1382,6 +1382,7 @@ def store_clear(user_id: str):
 # ============================================================================
 
 import sqlite3 as _sqlite3
+import re as _re
 
 _USERS_DB = os.path.join(DATA_DIR, "users.db")
 
@@ -1399,6 +1400,11 @@ def _init_users_db():
     for col, default in [
         ("role", "'member'"), ("org_id", "NULL"), ("is_active", "1"), ("last_login", "NULL"),
     ]:
+        # Defense-in-depth: these are hardcoded, but never build DDL from an
+        # identifier that isn't a plain [a-z_] name (blocks SQL injection if this
+        # list is ever fed from a variable/user input in future).
+        if not _re.fullmatch(r"[a-z_][a-z0-9_]*", col):
+            continue
         try:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT {default}")
         except Exception:

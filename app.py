@@ -11,6 +11,8 @@ import uuid
 import time
 import hashlib
 import hmac
+import secrets
+import ipaddress
 import imaplib
 import email as email_lib
 import asyncio
@@ -45,10 +47,13 @@ class Settings:
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "") or "https://qnrdduwczpexihzhpuhq.supabase.co"
     SUPABASE_KEY: str = os.getenv("SUPABASE_KEY", "")
     SUPABASE_ACCESS_TOKEN: str = os.getenv("SUPABASE_ACCESS_TOKEN", "")
-    WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET", "dev-secret-change-in-production")
+    # No hardcoded fallback secrets: use the env var, else a random per-process
+    # secret. A random secret means forged tokens are impossible even if the env
+    # var is forgotten (worst case: tokens invalidate on restart, never a known key).
+    WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET") or secrets.token_urlsafe(48)
     APP_NAME: str = "SENTINEL"
     APP_VERSION: str = "3.0.0"
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "sentinel-secret-change-in-production-2024")
+    JWT_SECRET: str = os.getenv("JWT_SECRET") or secrets.token_urlsafe(48)
     JWT_EXPIRY_HOURS: int = 72
     IMAP_SERVER: str = os.getenv("IMAP_SERVER", "imap.gmail.com")
     IMAP_PORT: int = int(os.getenv("IMAP_PORT", "993"))
@@ -57,6 +62,14 @@ class Settings:
     IMAP_FOLDER: str = os.getenv("IMAP_FOLDER", "INBOX")
     IMAP_POLL_INTERVAL: int = int(os.getenv("IMAP_POLL_INTERVAL", "30"))
     COST_PER_INCIDENT: float = float(os.getenv("COST_PER_INCIDENT", "4500"))
+    # Comma-separated list of allowed browser origins. Never "*" with credentials.
+    # Set CORS_ORIGINS in prod, e.g. "https://app.yourdomain.com".
+    ALLOWED_ORIGINS: List[str] = [
+        o.strip() for o in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:8000,http://127.0.0.1:8000"
+        ).split(",") if o.strip()
+    ]
 
 settings = Settings()
 
@@ -173,11 +186,18 @@ _geo_cache: dict = {}
 _geo_cache_ttl = 86400
 
 def _lookup_geo(ip: str) -> dict:
+    # SECURITY: `ip` may originate from the attacker-controlled X-Forwarded-For
+    # header. Only ever interpolate a validated IP address into the outbound URL,
+    # never raw header text (prevents URL/SSRF injection).
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return {"country": "", "region": "", "city": "", "_ts": time.time()}
     if ip in _geo_cache:
         entry = _geo_cache[ip]
         if time.time() - entry.get("_ts", 0) < _geo_cache_ttl:
             return entry
-    if ip in ("127.0.0.1", "::1", "localhost"):
+    if addr.is_loopback or addr.is_private or addr.is_reserved or addr.is_link_local:
         return {"country": "Local", "region": "Local", "city": "Local", "_ts": time.time()}
     try:
         import httpx as _httpx
@@ -249,7 +269,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             ip = request.client.host if request.client else "unknown"
             forwarded = request.headers.get("x-forwarded-for", "")
             if forwarded:
-                ip = forwarded.split(",")[0].strip()
+                candidate = forwarded.split(",")[0].strip()
+                # Only trust the header if it's a syntactically valid IP address.
+                try:
+                    ipaddress.ip_address(candidate)
+                    ip = candidate
+                except ValueError:
+                    pass
             ua_string = request.headers.get("user-agent", "")
             ua_parsed = _parse_user_agent(ua_string)
             geo = _lookup_geo(ip)
@@ -967,7 +993,7 @@ app = FastAPI(title="SENTINEL", version=settings.APP_VERSION)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
