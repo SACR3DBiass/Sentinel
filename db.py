@@ -378,6 +378,7 @@ def ensure_supabase_tables(url: str, key: str) -> bool:
     global _supabase_client
 
     if not url or not key:
+        print("[SENTINEL] Supabase URL or key missing", flush=True)
         return False
 
     # First check if tables already exist
@@ -385,23 +386,22 @@ def ensure_supabase_tables(url: str, key: str) -> bool:
         from supabase import create_client
         _supabase_client = create_client(url, key)
         if _tables_exist():
-            print("[SENTINEL] Supabase tables verified", flush=True)
+            print("[SENTINEL] Supabase tables verified - all good", flush=True)
             return True
-    except Exception:
-        pass
+        print("[SENTINEL] Supabase connected but tables missing - will auto-create", flush=True)
+    except Exception as e:
+        print(f"[SENTINEL] Supabase client init failed: {e}", flush=True)
 
     # Tables missing — need Management API token
     if not _SUPABASE_ACCESS_TOKEN:
-        print("[SENTINEL] WARNING: Supabase tables missing and no SUPABASE_ACCESS_TOKEN set.", flush=True)
-        print("[SENTINEL] To auto-create tables, set SUPABASE_ACCESS_TOKEN env var.", flush=True)
-        print("[SENTINEL] Create a token at: https://supabase.com/dashboard/account/tokens", flush=True)
-        print("[SENTINEL] OR run migration SQL manually in Supabase SQL Editor.", flush=True)
-        print("[SENTINEL] Falling back to local storage.", flush=True)
+        print("[SENTINEL] CRITICAL: Supabase tables missing and no SUPABASE_ACCESS_TOKEN env var.", flush=True)
+        print("[SENTINEL] Set SUPABASE_ACCESS_TOKEN in Railway variables.", flush=True)
+        print("[SENTINEL] Create token: https://supabase.com/dashboard/account/tokens", flush=True)
         return False
 
     project_ref = _extract_supabase_ref(url)
     if not project_ref:
-        print(f"[SENTINEL] Could not extract project ref from Supabase URL: {url}", flush=True)
+        print(f"[SENTINEL] CRITICAL: Could not extract project ref from URL: {url}", flush=True)
         return False
 
     print(f"[SENTINEL] Auto-creating Supabase tables (project: {project_ref})...", flush=True)
@@ -415,26 +415,36 @@ def ensure_supabase_tables(url: str, key: str) -> bool:
                 "Content-Type": "application/json",
             },
             json={"query": _MIGRATION_SQL},
-            timeout=60.0,
+            timeout=120.0,
         )
         if resp.status_code == 200:
-            print("[SENTINEL] Supabase tables created successfully", flush=True)
-            # Re-init client and verify
-            try:
-                from supabase import create_client as _cc
-                _supabase_client = _cc(url, key)
-                if _tables_exist():
-                    print("[SENTINEL] Supabase connected (tables verified)", flush=True)
-                    return True
-            except Exception:
-                pass
-            return True
+            print("[SENTINEL] Migration SQL executed successfully", flush=True)
         else:
-            body = resp.text[:500]
+            body = resp.text[:1000]
             print(f"[SENTINEL] Management API error {resp.status_code}: {body}", flush=True)
             return False
     except Exception as e:
-        print(f"[SENTINEL] Auto-migration failed: {e}", flush=True)
+        print(f"[SENTINEL] Management API call failed: {e}", flush=True)
+        return False
+
+    # Re-init client and verify tables exist
+    import time
+    time.sleep(2)
+    try:
+        from supabase import create_client as _cc
+        _supabase_client = _cc(url, key)
+        if _tables_exist():
+            print("[SENTINEL] Supabase connected - tables verified", flush=True)
+            return True
+        print("[SENTINEL] Tables created but not yet visible - retrying...", flush=True)
+        time.sleep(3)
+        if _tables_exist():
+            print("[SENTINEL] Supabase connected - tables verified (retry)", flush=True)
+            return True
+        print("[SENTINEL] WARNING: Migration ran but tables still not visible", flush=True)
+        return False
+    except Exception as e:
+        print(f"[SENTINEL] Post-migration verification failed: {e}", flush=True)
         return False
 
 def init_supabase(url: str, key: str):

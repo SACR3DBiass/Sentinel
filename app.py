@@ -2064,6 +2064,20 @@ def require_owner(request: Request) -> dict:
 
 
 # ============================================================================
+# ADMIN: Database Migration
+# ============================================================================
+@app.post("/api/admin/migrate")
+async def admin_migrate(request: Request):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = resolve_user_db(user)
+    if not user_db or user_db.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner only")
+    result = db.ensure_supabase_tables(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+    return {"success": result, "message": "Migration complete" if result else "Migration failed - check Railway logs"}
+
+# ============================================================================
 # ANALYTICS API (Owner Only)
 # ============================================================================
 @app.get("/api/analytics/overview")
