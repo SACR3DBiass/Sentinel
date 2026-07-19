@@ -1144,7 +1144,7 @@ async def startup():
 # ============================================================================
 # AUTH ROUTES
 # ============================================================================
-@app.post("/api/auth/register")
+@app.post("/api/auth/register", include_in_schema=False)
 async def register(payload: RegisterRequest, request: Request, response: Response):
     # Block scripted mass-signup: max 5 new accounts per IP per minute.
     enforce_rate_limit(request, "register", max_attempts=5)
@@ -1166,7 +1166,7 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=settings.JWT_EXPIRY_HOURS * 3600)
     return {"status": "success", "message": "Account created", "token": token, "username": user["username"], "user_id": user["id"]}
 
-@app.post("/api/auth/login")
+@app.post("/api/auth/login", include_in_schema=False)
 async def login(payload: LoginRequest, response: Response, request: Request):
     # Throttle brute-force: max 10 login attempts per IP per minute.
     enforce_rate_limit(request, "login", max_attempts=10)
@@ -1198,12 +1198,12 @@ async def login(payload: LoginRequest, response: Response, request: Request):
     threading.Thread(target=_bg_sync, daemon=True).start()
     return {"status": "success", "token": token, "username": user["username"], "user_id": user["id"]}
 
-@app.post("/api/auth/logout")
+@app.post("/api/auth/logout", include_in_schema=False)
 async def logout(response: Response):
     response.delete_cookie("sentinel_token")
     return {"status": "success"}
 
-@app.get("/api/auth/me")
+@app.get("/api/auth/me", include_in_schema=False)
 async def get_me(request: Request):
     user = get_current_user(request)
     if not user:

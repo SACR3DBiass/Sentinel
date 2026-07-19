@@ -510,7 +510,7 @@ async def lite_dashboard_page():
 # AUTH API
 # ============================================================================
 
-@app.post("/api/auth/register")
+@app.post("/api/auth/register", include_in_schema=False)
 async def lite_register(payload: RegisterRequest):
     existing = db.user_get_by_username(payload.username)
     if existing:
@@ -528,7 +528,7 @@ async def lite_register(payload: RegisterRequest):
     db.user_set_role(user["id"], "friend")
     return {"status": "success"}
 
-@app.post("/api/auth/login")
+@app.post("/api/auth/login", include_in_schema=False)
 async def lite_login(payload: LoginRequest):
     user = db.user_resolve_login(payload.username)
     if not user or not _verify_password(payload.password, user["password_hash"]):
@@ -536,7 +536,7 @@ async def lite_login(payload: LoginRequest):
     token = _create_token(user["id"], user["username"])
     return {"status": "success", "token": token, "username": user["username"]}
 
-@app.get("/api/auth/me")
+@app.get("/api/auth/me", include_in_schema=False)
 async def lite_me(request: Request):
     user = _get_current_user(request)
     if not user:
