@@ -564,7 +564,9 @@ async def lite_register(payload: RegisterRequest, request: Request, response: Re
 @app.post("/api/auth/login", include_in_schema=False)
 async def lite_login(payload: LoginRequest, request: Request, response: Response):
     import re as _re
-    identifier = db.sanitize_input(payload.username, max_len=100).lower()
+    identifier = db.sanitize_input(payload.username, max_len=100)
+    if "@" in identifier:
+        identifier = identifier.lower()
     lockout = db.check_login_lockout(identifier)
     if lockout:
         raise HTTPException(status_code=423, detail=f"Account locked. Try again in {lockout}s.")

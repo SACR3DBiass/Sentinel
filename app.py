@@ -1202,7 +1202,9 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
 @app.post("/api/auth/login", include_in_schema=False)
 async def login(payload: LoginRequest, response: Response, request: Request):
     enforce_rate_limit(request, "login", max_attempts=10)
-    identifier = db.sanitize_input(payload.username, max_len=100).lower()
+    identifier = db.sanitize_input(payload.username, max_len=100)
+    if "@" in identifier:
+        identifier = identifier.lower()
     lockout = db.check_login_lockout(identifier)
     if lockout:
         raise HTTPException(status_code=423, detail=f"Account locked. Try again in {lockout}s.")
