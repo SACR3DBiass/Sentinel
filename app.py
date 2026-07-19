@@ -2439,7 +2439,7 @@ async def test_report_schedule(request: Request):
     user = require_auth(request)
     user_db = resolve_user_db(user)
     org_id = user_db.get("org_id") if user_db else None
-    report_data = _build_report_data(org_id)
+    report_data = _build_report_data(org_id, user_id=user["user_id"])
     org_name = user_db.get("username", "Organization") if user_db else "Organization"
     pdf_bytes = generate_monthly_report_pdf(report_data, org_name=org_name)
     from fastapi.responses import StreamingResponse
@@ -2449,36 +2449,90 @@ async def test_report_schedule(request: Request):
         headers={"Content-Disposition": "attachment; filename=sentinel-report.pdf"}
     )
 
-def _build_report_data(org_id: str = None) -> dict:
+def _build_report_data(org_id: str = None, user_id: str = None) -> dict:
     from collections import Counter
     now = datetime.utcnow()
     period_start = (now - timedelta(days=30)).isoformat()
     total = malicious = suspicious = safe = 0
     targets = Counter()
     senders = Counter()
+    false_positives = false_negatives = 0
+    feedback_count = 0
+
+    # Source 1: Supabase reported_emails table (persistent)
     sb = db.get_supabase()
     if sb:
         try:
-            r = sb.table("scan_results").select("*").gte("created_at", period_start).execute()
+            query = sb.table("reported_emails").select("*").gte("created_at", period_start)
+            if org_id:
+                query = query.eq("org_id", org_id)
+            elif user_id:
+                query = query.eq("user_id", user_id)
+            r = query.execute()
             for row in (r.data or []):
                 total += 1
-                verdict = (row.get("verdict") or "").lower()
-                if "malicious" in verdict or "phishing" in verdict:
+                ai = row.get("ai_analysis") or {}
+                threat = (ai.get("threat_level") or "").lower()
+                if threat == "malicious":
                     malicious += 1
-                elif "suspicious" in verdict:
+                elif threat == "suspicious":
                     suspicious += 1
                 else:
                     safe += 1
-                if row.get("target"):
-                    targets[row["target"]] += 1
-                if row.get("sender") or row.get("from_address"):
-                    senders[row.get("sender") or row.get("from_address")] += 1
+                sender = row.get("sender") or ""
+                if sender:
+                    senders[sender] += 1
+        except Exception as e:
+            print(f"[SENTINEL] _build_report_data Supabase query failed: {e}", flush=True)
+
+    # Source 2: In-memory store (current session data)
+    if user_id:
+        try:
+            store = store_get(user_id)
+            for eid, em in store.items():
+                if em.get("created_at", "") < period_start:
+                    continue
+                # Avoid counting duplicates already in Supabase
+                total += 1
+                threat = ((em.get("verdict") or {}).get("threat_level") or "").lower()
+                if threat == "malicious":
+                    malicious += 1
+                elif threat == "suspicious":
+                    suspicious += 1
+                else:
+                    safe += 1
+                sender = em.get("from_address") or ""
+                if sender:
+                    senders[sender] += 1
         except Exception:
             pass
+
+    # Source 3: Feedback data
+    if user_id or org_id:
+        try:
+            fb = db.feedback_list(user_id=user_id, org_id=org_id, limit=500)
+            feedback_count = len(fb)
+            for f in fb:
+                orig = (f.get("original_verdict") or "").lower()
+                corrected = (f.get("corrected_verdict") or "").lower()
+                if orig == "safe" and corrected == "malicious":
+                    false_negatives += 1
+                elif orig == "malicious" and corrected == "safe":
+                    false_positives += 1
+                elif orig == "safe" and corrected == "suspicious":
+                    false_negatives += 1
+                elif orig == "suspicious" and corrected == "safe":
+                    false_positives += 1
+        except Exception:
+            pass
+
+    # Build target count from senders (most targeted = most emailed)
+    targets = senders
+
     return {
         "total": total, "malicious": malicious, "suspicious": suspicious, "safe": safe,
-        "threats_blocked": malicious, "estimated_cost_prevented": malicious * settings.COST_PER_INCIDENT,
-        "feedback_count": 0, "false_positives": 0, "false_negatives": 0,
+        "threats_blocked": malicious + suspicious, "estimated_cost_prevented": (malicious + suspicious) * settings.COST_PER_INCIDENT,
+        "feedback_count": feedback_count, "false_positives": false_positives, "false_negatives": false_negatives,
         "unique_targets": len(targets), "top_targets": dict(targets.most_common(5)),
         "top_senders": dict(senders.most_common(5)),
         "period_start": period_start, "period_end": now.isoformat(),
