@@ -7,18 +7,213 @@ import os
 import json
 import threading
 import uuid
+import time
+import re
+import hmac
+import hashlib
+import html as _html_mod
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 
 _supabase_client = None
 _supabase_available = False
 _store_lock = threading.Lock()
+_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+os.makedirs(_DATA_DIR, exist_ok=True)
 
 # Shared JWT secret — both app.py and lite.py import this so tokens work across
 # the main app and the /lite sub-app.  Prefer the env var in production.
 import secrets as _secrets
 JWT_SECRET: str = os.getenv("JWT_SECRET") or _secrets.token_urlsafe(48)
-JWT_EXPIRY_HOURS: int = 72
+JWT_EXPIRY_HOURS: int = 15  # 15-minute access tokens
+
+# ── Security: account lockout tracking ─────────────────────────
+# In-memory per-process.  After LOCKOUT_MAX_FAILURES failed logins
+# within LOCKOUT_WINDOW seconds the account is locked for LOCKOUT_DURATION.
+LOCKOUT_MAX_FAILURES = 5
+LOCKOUT_WINDOW = 900      # 15 min window to count failures
+LOCKOUT_DURATION = 900    # 15 min lockout
+_login_failures: Dict[str, List[float]] = {}   # username -> [timestamps]
+_login_locks: Dict[str, float] = {}            # username -> unlock_time
+
+def check_login_lockout(username: str) -> Optional[int]:
+    """Return seconds remaining if locked, else None."""
+    uname = username.lower()
+    unlock = _login_locks.get(uname, 0)
+    if unlock > time.time():
+        return int(unlock - time.time()) + 1
+    return None
+
+def record_login_failure(username: str):
+    uname = username.lower()
+    now = time.time()
+    failures = [t for t in _login_failures.get(uname, []) if now - t < LOCKOUT_WINDOW]
+    failures.append(now)
+    _login_failures[uname] = failures
+    if len(failures) >= LOCKOUT_MAX_FAILURES:
+        _login_locks[uname] = now + LOCKOUT_DURATION
+        print(f"[SECURITY] Account locked: {uname} (too many failures)", flush=True)
+
+def clear_login_failures(username: str):
+    _login_failures.pop(username.lower(), None)
+    _login_locks.pop(username.lower(), None)
+
+# ── Security: audit logging ────────────────────────────────────
+def audit_log(event: str, user_id: str = "", username: str = "",
+              details: str = "", ip: str = "", success: bool = True):
+    """Write a security event.  Supabase if available, else local JSON."""
+    entry = {
+        "id": str(uuid.uuid4()),
+        "event": event,
+        "user_id": user_id,
+        "username": username,
+        "details": details,
+        "ip": ip,
+        "success": success,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("audit_logs").insert(entry).execute()
+            return
+        except Exception:
+            pass
+    # Local fallback
+    path = os.path.join(_DATA_DIR, "audit_logs.json")
+    with _store_lock:
+        logs = []
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    logs = json.load(f)
+            except Exception:
+                logs = []
+        logs.append(entry)
+        # Keep last 5000 entries
+        if len(logs) > 5000:
+            logs = logs[-5000:]
+        with open(path, "w") as f:
+            json.dump(logs, f)
+
+# ── Security: refresh tokens ───────────────────────────────────
+REFRESH_TOKEN_DAYS = 7
+
+def refresh_token_create(user_id: str) -> str:
+    """Create an opaque refresh token and store it."""
+    token = _secrets.token_urlsafe(48)
+    entry = {"user_id": user_id, "token": token,
+             "created_at": datetime.utcnow().isoformat(),
+             "expires_at": (datetime.utcnow() + timedelta(days=REFRESH_TOKEN_DAYS)).isoformat()}
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("refresh_tokens").insert(entry).execute()
+            return token
+        except Exception:
+            pass
+    path = os.path.join(_DATA_DIR, "refresh_tokens.json")
+    with _store_lock:
+        tokens = []
+        if os.path.exists(path):
+            try:
+                with open(path, "r") as f:
+                    tokens = json.load(f)
+            except Exception:
+                tokens = []
+        tokens.append(entry)
+        with open(path, "w") as f:
+            json.dump(tokens, f)
+    return token
+
+def refresh_token_validate(token: str) -> Optional[str]:
+    """Validate refresh token, return user_id or None."""
+    sb = get_supabase()
+    if sb:
+        try:
+            result = sb.table("refresh_tokens").select("*").eq("token", token).execute()
+            if result.data:
+                rt = result.data[0]
+                if datetime.fromisoformat(rt["expires_at"].replace("Z", "+00:00")).replace(tzinfo=None) > datetime.utcnow():
+                    return rt["user_id"]
+                sb.table("refresh_tokens").delete().eq("token", token).execute()
+        except Exception:
+            pass
+    # Local fallback
+    path = os.path.join(_DATA_DIR, "refresh_tokens.json")
+    if not os.path.exists(path):
+        return None
+    with _store_lock:
+        try:
+            with open(path, "r") as f:
+                tokens = json.load(f)
+        except Exception:
+            return None
+        for rt in tokens:
+            if rt["token"] == token:
+                if datetime.fromisoformat(rt["expires_at"]) > datetime.utcnow():
+                    return rt["user_id"]
+                tokens.remove(rt)
+                break
+        with open(path, "w") as f:
+            json.dump(tokens, f)
+    return None
+
+def refresh_token_revoke(user_id: str):
+    """Delete all refresh tokens for a user (on logout / password change)."""
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("refresh_tokens").delete().eq("user_id", user_id).execute()
+        except Exception:
+            pass
+    path = os.path.join(_DATA_DIR, "refresh_tokens.json")
+    if not os.path.exists(path):
+        return
+    with _store_lock:
+        try:
+            with open(path, "r") as f:
+                tokens = json.load(f)
+            tokens = [t for t in tokens if t["user_id"] != user_id]
+            with open(path, "w") as f:
+                json.dump(tokens, f)
+        except Exception:
+            pass
+
+# ── Security: input sanitization ───────────────────────────────
+_TAG_RE = re.compile(r"<[^>]+>")
+
+def sanitize_input(value: str, max_len: int = 100) -> str:
+    """Strip HTML tags and trim."""
+    clean = _TAG_RE.sub("", value).strip()
+    clean = _html_mod.unescape(clean)
+    return clean[:max_len]
+
+# ── Security: CSRF tokens ─────────────────────────────────────
+_csrf_store: Dict[str, float] = {}  # token -> expiry
+
+def csrf_create(ttl: int = 3600) -> str:
+    token = _secrets.token_urlsafe(32)
+    _csrf_store[token] = time.time() + ttl
+    return token
+
+def csrf_validate(token: str) -> bool:
+    expiry = _csrf_store.pop(token, None)
+    if expiry and time.time() < expiry:
+        return True
+    return False
+
+# ── Security: webhook signature ────────────────────────────────
+WEBHOOK_SECRET: str = os.getenv("WEBHOOK_SECRET") or _secrets.token_urlsafe(48)
+
+def webhook_sign(payload: bytes) -> str:
+    """HMAC-SHA256 signature for outbound webhooks."""
+    return hmac.new(WEBHOOK_SECRET.encode(), payload, hashlib.sha256).hexdigest()
+
+def webhook_verify(payload: bytes, signature: str) -> bool:
+    """Verify an inbound webhook signature."""
+    expected = hmac.new(WEBHOOK_SECRET.encode(), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 # ============================================================================
 # SUPABASE CONNECTION
@@ -596,11 +791,14 @@ def user_set_role(user_id: str, role: str) -> bool:
     except Exception:
         return False
 
-def user_update_last_login(user_id: str):
+def user_update_last_login(user_id: str, ip: str = ""):
     sb = get_supabase()
     if sb:
         try:
-            sb.table("users").update({"last_login": datetime.utcnow().isoformat()}).eq("id", user_id).execute()
+            data = {"last_login": datetime.utcnow().isoformat()}
+            if ip:
+                data["last_login_ip"] = ip
+            sb.table("users").update(data).eq("id", user_id).execute()
         except Exception:
             pass
 
@@ -1410,8 +1608,7 @@ def reporting_monthly_enhanced(org_id: str = None, months_back: int = 1, cost_pe
 # LOCAL FALLBACK STORAGE (SQLite + JSON)
 # ============================================================================
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-os.makedirs(DATA_DIR, exist_ok=True)
+DATA_DIR = _DATA_DIR
 
 def _user_data_path(user_id: str) -> str:
     user_dir = os.path.join(DATA_DIR, user_id)

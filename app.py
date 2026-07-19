@@ -55,7 +55,7 @@ class Settings:
     APP_NAME: str = "SENTINEL"
     APP_VERSION: str = "3.0.0"
     JWT_SECRET: str = os.getenv("JWT_SECRET") or db.JWT_SECRET
-    JWT_EXPIRY_HOURS: int = 72
+    JWT_EXPIRY_HOURS: int = 15  # 15-minute access tokens (refresh token handles long sessions)
     IMAP_SERVER: str = os.getenv("IMAP_SERVER", "imap.gmail.com")
     IMAP_PORT: int = int(os.getenv("IMAP_PORT", "993"))
     IMAP_USERNAME: str = os.getenv("IMAP_USERNAME", "")
@@ -335,6 +335,25 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             )
         except Exception:
             pass
+        return response
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        host = request.headers.get("host", "")
+        if "localhost" not in host and "127.0.0.1" not in host:
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://fonts.googleapis.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data:; connect-src 'self' https://ipapi.co https://api.ipify.org;"
+        )
         return response
 
 # ============================================================================
@@ -1039,6 +1058,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
 app.mount("/lite", lite_app)
@@ -1146,37 +1166,65 @@ async def startup():
 # ============================================================================
 @app.post("/api/auth/register", include_in_schema=False)
 async def register(payload: RegisterRequest, request: Request, response: Response):
-    # Block scripted mass-signup: max 5 new accounts per IP per minute.
     enforce_rate_limit(request, "register", max_attempts=5)
-    existing = user_get_by_username(payload.username)
+    username = db.sanitize_input(payload.username, max_len=30)
+    email = db.sanitize_input(payload.email, max_len=100).lower()
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    existing = user_get_by_username(username)
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
     from db import user_get_by_email
-    existing_email = user_get_by_email(payload.email)
+    existing_email = user_get_by_email(email)
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already registered")
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not re.search(r"[A-Z]", payload.password) or not re.search(r"[0-9]", payload.password):
+        raise HTTPException(status_code=400, detail="Password must contain an uppercase letter and a number")
     password_hash = hash_password(payload.password)
     org_id = None
     if settings.SUPABASE_URL:
         org_id = db.get_or_create_default_org()
-    user = user_create(payload.username, payload.email, password_hash, org_id)
+    user = user_create(username, email, password_hash, org_id)
     if not user:
         raise HTTPException(status_code=409, detail="Email or username already taken")
     token = create_token(user["id"], user["username"])
-    response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=settings.JWT_EXPIRY_HOURS * 3600)
+    refresh = db.refresh_token_create(user["id"])
+    response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=900)
+    response.set_cookie(key="sentinel_refresh", value=refresh, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=86400 * 7)
+    ip = _client_ip(request)
+    db.audit_log("register", user["id"], username, "account created", ip=ip)
     return {"status": "success", "message": "Account created", "token": token, "username": user["username"], "user_id": user["id"]}
 
 @app.post("/api/auth/login", include_in_schema=False)
 async def login(payload: LoginRequest, response: Response, request: Request):
-    # Throttle brute-force: max 10 login attempts per IP per minute.
     enforce_rate_limit(request, "login", max_attempts=10)
-    user = db.user_resolve_login(payload.username)
+    identifier = db.sanitize_input(payload.username, max_len=100).lower()
+    lockout = db.check_login_lockout(identifier)
+    if lockout:
+        raise HTTPException(status_code=423, detail=f"Account locked. Try again in {lockout}s.")
+    user = db.user_resolve_login(identifier)
     if not user or not verify_password(payload.password, user["password_hash"]):
+        db.record_login_failure(identifier)
+        ip = _client_ip(request)
+        db.audit_log("login_failed", username=identifier, details="bad credentials", ip=ip, success=False)
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    user_update_last_login(user["id"])
+    db.clear_login_failures(identifier)
+    user_update_last_login(user["id"], ip=_client_ip(request))
     token = create_token(user["id"], user["username"])
-    response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=settings.JWT_EXPIRY_HOURS * 3600)
-    # Fire-and-forget: sync user to Supabase in background so login is fast
+    refresh = db.refresh_token_create(user["id"])
+    response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=900)
+    response.set_cookie(key="sentinel_refresh", value=refresh, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=86400 * 7)
+    ip = _client_ip(request)
+    # IP-based suspicious login alert
+    prev_ip = user.get("last_login_ip", "")
+    alert = ""
+    if prev_ip and prev_ip != ip:
+        alert = f" (new IP: {ip}, was {prev_ip})"
+    db.audit_log("login", user["id"], user["username"], f"success{alert}", ip=ip)
     import threading
     def _bg_sync():
         try:
@@ -1199,9 +1247,32 @@ async def login(payload: LoginRequest, response: Response, request: Request):
     return {"status": "success", "token": token, "username": user["username"], "user_id": user["id"]}
 
 @app.post("/api/auth/logout", include_in_schema=False)
-async def logout(response: Response):
+async def logout(response: Response, request: Request):
+    user = get_current_user(request)
+    if user:
+        db.refresh_token_revoke(user["user_id"])
+        db.audit_log("logout", user["user_id"], user.get("username", ""), ip=_client_ip(request))
     response.delete_cookie("sentinel_token")
+    response.delete_cookie("sentinel_refresh")
     return {"status": "success"}
+
+@app.post("/api/auth/refresh", include_in_schema=False)
+async def refresh_token(request: Request, response: Response):
+    refresh = request.cookies.get("sentinel_refresh", "")
+    if not refresh:
+        raise HTTPException(status_code=401, detail="No refresh token")
+    user_id = db.refresh_token_validate(refresh)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+    user = user_get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    new_token = create_token(user["id"], user["username"])
+    new_refresh = db.refresh_token_create(user["id"])
+    db.refresh_token_revoke(user_id)
+    response.set_cookie(key="sentinel_token", value=new_token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=900)
+    response.set_cookie(key="sentinel_refresh", value=new_refresh, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=86400 * 7)
+    return {"status": "success", "token": new_token, "username": user["username"], "user_id": user["id"]}
 
 @app.get("/api/auth/me", include_in_schema=False)
 async def get_me(request: Request):
@@ -1214,6 +1285,53 @@ async def get_me(request: Request):
         "username": user["username"],
         "role": user_db.get("role", "member") if user_db else "member"
     }
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@app.post("/api/auth/change-password", include_in_schema=False)
+async def change_password(payload: ChangePasswordRequest, request: Request, response: Response):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = resolve_user_db(user)
+    if not user_db:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not verify_password(payload.current_password, user_db["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    if len(payload.new_password) < 8:
+        raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
+    if not re.search(r"[A-Z]", payload.new_password) or not re.search(r"[0-9]", payload.new_password):
+        raise HTTPException(status_code=400, detail="New password must contain an uppercase letter and a number")
+    new_hash = hash_password(payload.new_password)
+    sb = db.get_supabase()
+    if sb:
+        try:
+            sb.table("users").update({"password_hash": new_hash}).eq("id", user["user_id"]).execute()
+        except Exception:
+            pass
+    try:
+        import sqlite3 as _sqlite3
+        conn = _sqlite3.connect(db._local_db_path())
+        conn.execute("UPDATE users SET password_hash=? WHERE id=?", (new_hash, user["user_id"]))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+    db.refresh_token_revoke(user["user_id"])
+    db.audit_log("password_change", user["user_id"], user.get("username", ""), ip=_client_ip(request))
+    new_token = create_token(user["user_id"], user.get("username", ""))
+    response.set_cookie(key="sentinel_token", value=new_token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=900)
+    return {"status": "success", "message": "Password changed. Please log in again."}
+
+@app.get("/api/auth/csrf-token", include_in_schema=False)
+async def get_csrf_token(request: Request):
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = db.csrf_create()
+    return {"csrf_token": token}
 
 # ============================================================================
 # API ROUTES
@@ -1501,6 +1619,8 @@ async def create_invite(payload: InviteRequest, request: Request):
     token = invite["token"]
     base_url = str(request.base_url).rstrip("/")
     invite_link = f"{base_url}/accept-invite/{token}"
+    ip = _client_ip(request)
+    db.audit_log("invite_created", user["user_id"], user.get("username", ""), f"email={payload.email} role={payload.role}", ip=ip)
     return {"status": "success", "token": token, "invite_link": invite_link}
 
 @app.get("/api/v1/invites")
@@ -1541,9 +1661,10 @@ async def accept_invite(token: str, request: Request):
     ok = invite_accept(token, user["user_id"])
     if not ok:
         raise HTTPException(status_code=400, detail="Invalid or expired invite")
-    # Return the user's role so the client can redirect appropriately
     fresh_user = user_get_by_id(user["user_id"])
     role = fresh_user.get("role", "member") if fresh_user else "member"
+    ip = _client_ip(request)
+    db.audit_log("invite_accepted", user["user_id"], user.get("username", ""), f"role={role}", ip=ip)
     return {"status": "success", "role": role}
 
 @app.get("/api/v1/team")
@@ -1581,6 +1702,7 @@ async def remove_team_member(member_id: str, request: Request):
     if sb:
         try:
             sb.table("users").update({"org_id": None, "role": "member"}).eq("id", member_id).execute()
+            db.audit_log("member_removed", user["user_id"], user.get("username", ""), f"removed={target.get('username', member_id)}", ip=_client_ip(request))
             return {"status": "success"}
         except Exception:
             pass
@@ -1591,6 +1713,7 @@ async def remove_team_member(member_id: str, request: Request):
         c.execute("UPDATE users SET org_id = NULL, role = 'member' WHERE user_id = ?", (member_id,))
         conn.commit()
         conn.close()
+        db.audit_log("member_removed", user["user_id"], user.get("username", ""), f"removed={target.get('username', member_id)}", ip=_client_ip(request))
         return {"status": "success"}
     except Exception:
         raise HTTPException(status_code=500, detail="Failed to remove member")

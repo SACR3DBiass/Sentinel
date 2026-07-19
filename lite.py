@@ -511,29 +511,60 @@ async def lite_dashboard_page():
 # ============================================================================
 
 @app.post("/api/auth/register", include_in_schema=False)
-async def lite_register(payload: RegisterRequest):
-    existing = db.user_get_by_username(payload.username)
+async def lite_register(payload: RegisterRequest, request: Request, response: Response):
+    import re as _re
+    username = db.sanitize_input(payload.username, max_len=30)
+    email = db.sanitize_input(payload.email, max_len=100).lower()
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+    existing = db.user_get_by_username(username)
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
-    existing_email = db.user_get_by_email(payload.email)
+    existing_email = db.user_get_by_email(email)
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already registered")
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not _re.search(r"[A-Z]", payload.password) or not _re.search(r"[0-9]", payload.password):
+        raise HTTPException(status_code=400, detail="Password must contain an uppercase letter and a number")
     pw_hash = _hash_password(payload.password)
     org_id = None
     if db.get_supabase():
         org_id = db.get_or_create_default_org()
-    user = db.user_create(payload.username, payload.email, pw_hash, org_id, user_id=None)
+    user = db.user_create(username, email, pw_hash, org_id, user_id=None)
     if not user:
         raise HTTPException(status_code=409, detail="Email or username already taken")
     db.user_set_role(user["id"], "friend")
-    return {"status": "success"}
+    token = _create_token(user["id"], user["username"])
+    refresh = db.refresh_token_create(user["id"])
+    response.set_cookie(key="sentinel_lite_token", value=token, httponly=True, samesite="lax", max_age=900)
+    response.set_cookie(key="sentinel_lite_refresh", value=refresh, httponly=True, samesite="lax", max_age=86400 * 7)
+    ip = request.client.host if request.client else "unknown"
+    db.audit_log("register", user["id"], username, "lite account created", ip=ip)
+    return {"status": "success", "token": token, "username": user["username"]}
 
 @app.post("/api/auth/login", include_in_schema=False)
-async def lite_login(payload: LoginRequest):
-    user = db.user_resolve_login(payload.username)
+async def lite_login(payload: LoginRequest, request: Request, response: Response):
+    import re as _re
+    identifier = db.sanitize_input(payload.username, max_len=100).lower()
+    lockout = db.check_login_lockout(identifier)
+    if lockout:
+        raise HTTPException(status_code=423, detail=f"Account locked. Try again in {lockout}s.")
+    user = db.user_resolve_login(identifier)
     if not user or not _verify_password(payload.password, user["password_hash"]):
+        db.record_login_failure(identifier)
+        ip = request.client.host if request.client else "unknown"
+        db.audit_log("login_failed", username=identifier, details="bad credentials (lite)", ip=ip, success=False)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    db.clear_login_failures(identifier)
     token = _create_token(user["id"], user["username"])
+    refresh = db.refresh_token_create(user["id"])
+    response.set_cookie(key="sentinel_lite_token", value=token, httponly=True, samesite="lax", max_age=900)
+    response.set_cookie(key="sentinel_lite_refresh", value=refresh, httponly=True, samesite="lax", max_age=86400 * 7)
+    ip = request.client.host if request.client else "unknown"
+    db.audit_log("login", user["id"], user["username"], "success (lite)", ip=ip)
     return {"status": "success", "token": token, "username": user["username"]}
 
 @app.get("/api/auth/me", include_in_schema=False)
@@ -543,6 +574,35 @@ async def lite_me(request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
     groq_key = db.user_groq_key_get(user["user_id"])
     return {"user_id": user["user_id"], "username": user["username"], "groq_key_set": bool(groq_key)}
+
+@app.post("/api/auth/logout", include_in_schema=False)
+async def lite_logout(response: Response, request: Request):
+    user = _get_current_user(request)
+    if user:
+        db.refresh_token_revoke(user["user_id"])
+        ip = request.client.host if request.client else "unknown"
+        db.audit_log("logout", user["user_id"], user.get("username", ""), ip=ip)
+    response.delete_cookie("sentinel_lite_token")
+    response.delete_cookie("sentinel_lite_refresh")
+    return {"status": "success"}
+
+@app.post("/api/auth/refresh", include_in_schema=False)
+async def lite_refresh_token(request: Request, response: Response):
+    refresh = request.cookies.get("sentinel_lite_refresh", "")
+    if not refresh:
+        raise HTTPException(status_code=401, detail="No refresh token")
+    user_id = db.refresh_token_validate(refresh)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+    user = db.user_get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    new_token = _create_token(user["id"], user["username"])
+    new_refresh = db.refresh_token_create(user["id"])
+    db.refresh_token_revoke(user_id)
+    response.set_cookie(key="sentinel_lite_token", value=new_token, httponly=True, samesite="lax", max_age=900)
+    response.set_cookie(key="sentinel_lite_refresh", value=new_refresh, httponly=True, samesite="lax", max_age=86400 * 7)
+    return {"status": "success", "token": new_token, "username": user["username"]}
 
 
 # ============================================================================
