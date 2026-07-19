@@ -4497,7 +4497,7 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             .s-nav.open { display: flex !important; flex-direction: column; position: absolute; top: 64px; left: 0; right: 0; background: #111; border-bottom: 1px solid #1a1a1a; padding: 8px 12px; gap: 6px; z-index: 99; }
             .s-wrap { padding: 0 12px !important; }
             .s-main { padding: 24px 12px !important; }
-            .s-tabs { flex-wrap: wrap !important; gap: 6px !important; }
+            .s-tabs { flex-wrap: wrap !important; gap: 10px !important; }
             .s-card-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
             .s-invite-row { flex-direction: column !important; }
             .s-modal { max-width: calc(100vw - 16px) !important; margin: 8px !important; }
@@ -4634,15 +4634,15 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             var cardStyle = { background:'linear-gradient(145deg, #111, #0d0d0d)', border:'1px solid #1a1a1a', borderRadius:14, padding:24, marginBottom:16 };
 
             var tabs = [
-                {id:'connections', label:'Email Connections'},
-                {id:'scans', label:'Scan History'},
-                {id:'team', label:'Team'},
-                {id:'reports', label:'Scheduled Reports'},
-                {id:'branding', label:'Branding'},
-                {id:'rules', label:'Detection Rules'},
-                {id:'alerts', label:'Alerts'},
-                {id:'intel', label:'Threat Intel'},
-                {id:'simulations', label:'Simulations'}
+                {id:'connections', label:'Email Connections', icon:'\\u260E'},
+                {id:'scans', label:'Scan History', icon:'\\u23F1'},
+                {id:'team', label:'Team', icon:'\\u2465'},
+                {id:'reports', label:'Reports', icon:'\\u2602'},
+                {id:'branding', label:'Branding', icon:'\\u2728'},
+                {id:'rules', label:'Rules', icon:'\\u2699'},
+                {id:'alerts', label:'Alerts', icon:'\\u26A0'},
+                {id:'intel', label:'Threat Intel', icon:'\\u1F6E1'},
+                {id:'simulations', label:'Simulations', icon:'\\u2694'}
             ];
 
             return React.createElement('div', { style:{minHeight:'100vh'} },
@@ -4660,10 +4660,23 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                     )
                 ),
                 React.createElement('main', { className:'s-main', style:{maxWidth:1000,margin:'0 auto',padding:'32px 24px'} },
-                    React.createElement('div', { className:'s-tabs', style:{display:'flex',gap:8,marginBottom:32} },
+                    React.createElement('div', { className:'s-tabs', style:{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))',gap:10,marginBottom:32} },
                         tabs.map(function(t) {
                             var isActive = tab === t.id;
-                            return React.createElement('button', { key:t.id, onClick:function() { setTab(t.id); }, style:Object.assign({}, btnDark, { background:isActive?'rgba(220,38,38,0.1)':'#161616', borderColor:isActive?'rgba(220,38,38,0.4)':'#282828', color:isActive?'#EF4444':'#a0a0a0' }) }, t.label);
+                            return React.createElement('button', { key:t.id, onClick:function() { setTab(t.id); }, style:{
+                                display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                                gap:6, padding:'16px 12px', borderRadius:12, fontSize:12, fontWeight:600,
+                                cursor:'pointer', border:'1px solid', fontFamily:'Inter', transition:'all 0.25s ease',
+                                background: isActive ? 'rgba(220,38,38,0.08)' : '#111',
+                                borderColor: isActive ? 'rgba(220,38,38,0.35)' : '#1e1e1e',
+                                color: isActive ? '#EF4444' : '#777',
+                                boxShadow: isActive ? '0 4px 20px rgba(220,38,38,0.12)' : 'none',
+                                transform: isActive ? 'translateY(-2px)' : 'none',
+                                minHeight:80,
+                            } },
+                                React.createElement('span', { style:{fontSize:22,lineHeight:1} }, t.icon),
+                                React.createElement('span', null, t.label)
+                            );
                         })
                     ),
                     tab === 'connections' ? React.createElement('div', null,
