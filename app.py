@@ -4674,19 +4674,14 @@ a:hover{text-decoration:underline}
 <header class="header">
   <div class="header-left">
     <a href="/dashboard" class="logo">
-      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M16 2L4 8v8c0 7.18 5.12 13.9 12 16 6.88-2.1 12-8.82 12-16V8L16 2z" fill="#dc2626" opacity=".15"/>
-        <path d="M16 2L4 8v8c0 7.18 5.12 13.9 12 16 6.88-2.1 12-8.82 12-16V8L16 2z" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="16" cy="14" r="4" stroke="#fff" stroke-width="1.5"/>
-        <path d="M16 10v4l2.5 1.5" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
-      </svg>
+      <svg viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="31"><path d="M20 2L4 10v12c0 11 7.2 21.3 16 24 8.8-2.7 16-13 16-24V10L20 2z" fill="url(#lgS)" stroke="#991B1B" stroke-width="1.5"/><path d="M20 10v8m0 0v8m0-8l-4-4m4 4l4-4" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="lgS" x1="4" y1="2" x2="36" y2="46"><stop stop-color="#DC2626"/><stop offset="1" stop-color="#7F1D1D"/></linearGradient></defs></svg>
       SENTINEL
     </a>
     <button class="hamburger" onclick="document.querySelector('.header-nav').classList.toggle('open')">&#9776;</button>
   </div>
   <nav class="header-nav">
     <a href="/dashboard"><button>Back to Dashboard</button></a>
-    <button onclick="logout()">Logout</button>
+    <a href="/login" onclick="event.preventDefault(); logout()"><button>Logout</button></a>
   </nav>
 </header>
 
@@ -4960,6 +4955,17 @@ a:hover{text-decoration:underline}
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
+window.onerror = function(msg, src, line) {
+  var el = document.getElementById('connectionsList');
+  if (el) el.innerHTML = '<div class="empty-state"><p style="color:var(--red)">JavaScript Error: ' + String(msg).replace(/</g,'&lt;') + ' (line ' + line + ')</p></div>';
+  return false;
+};
+
+if (!getToken()) {
+  window.location.href = '/login';
+  throw new Error('No auth token');
+}
+
 /* ============================
    API HELPERS
    ============================ */
@@ -5056,9 +5062,9 @@ function fmtDate(s) {
    1. EMAIL CONNECTIONS
    ============================ */
 function loadConnections() {
+  var el = document.getElementById('connectionsList');
   apiGet('/connections').then(function(data) {
     var list = data.connections || [];
-    var el = document.getElementById('connectionsList');
     if (!list.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📧</div><p>No connections yet. Add one to get started.</p></div>'; return; }
     el.innerHTML = list.map(function(c) {
       return '<div class="connection-item">' +
@@ -5075,7 +5081,7 @@ function loadConnections() {
       '</div>';
     }).join('');
   }).catch(function(e) {
-    document.getElementById('connectionsList').innerHTML = '<div class="empty-state"><p>Failed to load connections.</p></div>';
+    el.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Failed to load connections: ' + (e.message || 'Unknown error').replace(/</g,'&lt;') + '</p></div>';
   });
 }
 
@@ -5144,7 +5150,7 @@ function submitConnection() {
 function toggleGuide(id, btn) {
   var el = document.getElementById(id);
   el.classList.toggle('open');
-  btn.innerHTML = (el.classList.contains('open') ? '&#9652; ' : '&#9662; ') + btn.textContent.replace(/^[▲▼]\\s*/, '');
+  btn.innerHTML = (el.classList.contains('open') ? '&#9652; ' : '&#9662; ') + btn.textContent.replace(/^[▲▼][ \t]*/, '');
 }
 
 /* ============================
@@ -5325,18 +5331,26 @@ function saveReports() {
 }
 
 function downloadTestReport() {
-  var f = document.createElement('form');
-  f.method = 'POST';
-  f.action = '/api/v1/report-schedule/test';
-  f.target = '_blank';
-  var h = document.createElement('input');
-  h.type = 'hidden';
-  h.name = 'Authorization';
-  h.value = 'Bearer ' + getToken();
-  f.appendChild(h);
-  document.body.appendChild(f);
-  f.submit();
-  document.body.removeChild(f);
+  toast('Generating test report...');
+  fetch('/api/v1/report-schedule/test', {
+    method: 'POST',
+    headers: {'Authorization': 'Bearer ' + getToken()}
+  }).then(function(r) {
+    if (!r.ok) throw new Error('Failed to generate report');
+    return r.blob();
+  }).then(function(blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'sentinel-report.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Report downloaded');
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
 }
 
 /* ============================
@@ -5746,8 +5760,12 @@ function endSimulation(id, btn) {
 /* ============================
    INIT
    ============================ */
-loadedTabs['connections'] = true;
-loadConnections();
+try {
+  loadedTabs['connections'] = true;
+  loadConnections();
+} catch(e) {
+  document.getElementById('connectionsList').innerHTML = '<div class="empty-state"><p style="color:var(--red)">Init error: ' + e.message.replace(/</g,'&lt;') + '</p></div>';
+}
 </script>
 </body>
 </html>"""
