@@ -4472,922 +4472,1283 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
 SETTINGS_PAGE = """<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SENTINEL - Settings</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #f5f5f5; min-height: 100vh; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #111; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-        @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes modalIn { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes toastIn { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
-        .s-hamburger { display: none; background: none; border: none; color: #f5f5f5; font-size: 22px; cursor: pointer; padding: 6px; line-height: 1; }
-        @media (max-width: 768px) {
-            .s-hamburger { display: flex !important; }
-            .s-nav { display: none !important; }
-            .s-nav.open { display: flex !important; flex-direction: column; position: absolute; top: 64px; left: 0; right: 0; background: #111; border-bottom: 1px solid #1a1a1a; padding: 8px 12px; gap: 6px; z-index: 99; }
-            .s-wrap { padding: 0 12px !important; }
-            .s-main { padding: 24px 12px !important; }
-            .s-tabs { flex-wrap: wrap !important; gap: 10px !important; }
-            .s-card-row { flex-direction: column !important; align-items: stretch !important; gap: 10px !important; }
-            .s-invite-row { flex-direction: column !important; }
-            .s-modal { max-width: calc(100vw - 16px) !important; margin: 8px !important; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTINEL — Settings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--bg-card:#111111;--bg-input:#0a0a0a;
+  --border:#1a1a1a;--border-light:#282828;
+  --red:#dc2626;--red-glow:rgba(220,38,38,0.25);--red-dark:#991b1b;
+  --green:#22c55e;--green-dim:#166534;
+  --yellow:#eab308;--yellow-dim:#854d0e;
+  --blue:#3b82f6;--blue-dim:#1e40af;
+  --purple:#a855f7;
+  --text:#e5e5e5;--text-dim:#a1a1a1;--text-muted:#555;
+  --font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+  --radius:12px;--radius-sm:8px;
+}
+html{font-size:14px}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
+a{color:var(--red);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border-light);border-radius:3px}
+
+/* Header */
+.header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px}
+.header-left{display:flex;align-items:center;gap:16px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;letter-spacing:2px;color:#fff}
+.logo svg{width:28px;height:28px}
+.header-nav{display:flex;gap:8px}
+.header-nav button{background:none;border:1px solid var(--border-light);color:var(--text-dim);padding:6px 14px;border-radius:var(--radius-sm);cursor:pointer;font-family:var(--font);font-size:.85rem;transition:all .2s ease}
+.header-nav button:hover{border-color:var(--text-dim);color:var(--text)}
+.hamburger{display:none;background:none;border:none;color:var(--text);font-size:1.5rem;cursor:pointer;padding:4px 8px}
+
+/* Layout */
+.main{max-width:1200px;margin:0 auto;padding:24px}
+.page-title{font-size:1.5rem;font-weight:700;margin-bottom:20px}
+
+/* Tab Grid */
+.tab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:28px}
+.tab-btn{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:all .25s ease;text-align:center}
+.tab-btn:hover{border-color:var(--border-light);transform:translateY(-1px)}
+.tab-btn.active{border-color:var(--red);box-shadow:0 0 20px var(--red-glow);transform:translateY(-2px);color:var(--red)}
+.tab-icon{font-size:1.8rem;line-height:1}
+.tab-label{font-size:.8rem;font-weight:500;color:var(--text-dim);transition:color .2s}
+.tab-btn.active .tab-label{color:var(--red)}
+
+/* Tab Panels */
+.tab-panel{display:none;animation:fadeIn .25s ease}
+.tab-panel.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Cards */
+.card{background:linear-gradient(135deg,var(--bg-card) 0%,#0f0f0f 100%);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:all .25s ease}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+.card-title{font-size:1.1rem;font-weight:600}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border:none;border-radius:var(--radius-sm);font-family:var(--font);font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s ease;white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,var(--red) 0%,var(--red-dark) 100%);color:#fff}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 12px var(--red-glow)}
+.btn-secondary{background:#1a1a1a;color:var(--text-dim);border:1px solid var(--border-light)}
+.btn-secondary:hover{border-color:var(--text-muted);color:var(--text)}
+.btn-ghost{background:none;color:var(--text-dim);border:1px solid transparent}
+.btn-ghost:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.btn-danger{background:rgba(220,38,38,.1);color:var(--red);border:1px solid rgba(220,38,38,.2)}
+.btn-danger:hover{background:rgba(220,38,38,.2)}
+.btn-sm{padding:5px 12px;font-size:.78rem}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* Inputs */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:.8rem;font-weight:500;color:var(--text-dim);margin-bottom:5px}
+.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;background:var(--bg-input);border:1px solid var(--border-light);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:.88rem;transition:border-color .2s,box-shadow .2s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px var(--red-glow)}
+.form-textarea{min-height:80px;resize:vertical;font-family:var(--mono);font-size:.82rem}
+.form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23a1a1a1'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-hint{font-size:.75rem;color:var(--text-muted);margin-top:4px}
+
+/* Toggle Switch */
+.toggle{position:relative;width:40px;height:22px;display:inline-block;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:#333;border-radius:22px;cursor:pointer;transition:background .25s}
+.toggle-slider::before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#666;top:3px;left:3px;transition:transform .25s,background .25s}
+.toggle input:checked+.toggle-slider{background:var(--green)}
+.toggle input:checked+.toggle-slider::before{transform:translateX(18px);background:#fff}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.badge-success{background:rgba(34,197,94,.12);color:var(--green)}
+.badge-error{background:rgba(220,38,38,.12);color:var(--red)}
+.badge-warning{background:rgba(234,179,8,.12);color:var(--yellow)}
+.badge-info{background:rgba(59,130,246,.12);color:var(--blue)}
+.badge-purple{background:rgba(168,85,247,.12);color:var(--purple)}
+.badge-neutral{background:rgba(161,161,161,.1);color:var(--text-dim)}
+
+/* Status dot */
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.status-dot.active{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,.4)}
+.status-dot.inactive{background:#555}
+
+/* Connection item */
+.connection-item{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;transition:border-color .2s;background:rgba(17,17,17,.5)}
+.connection-item:hover{border-color:var(--border-light)}
+.connection-info{flex:1;min-width:0}
+.connection-info h4{font-size:.92rem;font-weight:600;margin-bottom:2px;display:flex;align-items:center;gap:8px}
+.connection-info p{font-size:.78rem;color:var(--text-muted);font-family:var(--mono)}
+.connection-actions{display:flex;gap:6px;flex-shrink:0}
+
+/* Item rows (generic) */
+.item-row{padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;display:flex;align-items:flex-start;gap:12px;transition:border-color .2s;flex-wrap:wrap}
+.item-row:hover{border-color:var(--border-light)}
+.item-row .item-main{flex:1;min-width:0}
+.item-row .item-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:.78rem;color:var(--text-muted);margin-top:4px}
+.item-row .item-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+
+/* Avatar */
+.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--red),var(--red-dark));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;color:#fff;flex-shrink:0}
+
+/* Stats Grid */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.stat-card{background:linear-gradient(135deg,var(--bg-card),#0d0d0d);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center}
+.stat-card .stat-value{font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,var(--red),#f87171);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-card .stat-label{font-size:.75rem;color:var(--text-muted);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s}
+.modal-overlay.show{display:flex}
+.modal{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius);width:100%;max-width:560px;max-height:85vh;overflow-y:auto;padding:24px}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.modal-header h3{font-size:1.1rem;font-weight:600}
+.modal-close{background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;padding:4px 8px;line-height:1}
+.modal-close:hover{color:var(--text)}
+
+/* Toast */
+.toast-container{position:fixed;top:68px;right:20px;z-index:300;display:flex;flex-direction:column;gap:8px}
+.toast{padding:10px 18px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:500;animation:slideIn .25s ease,fadeOut .3s 2.7s forwards;max-width:340px;word-break:break-word}
+.toast-success{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:var(--green)}
+.toast-error{background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);color:var(--red)}
+@keyframes slideIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes fadeOut{to{opacity:0;transform:translateX(40px)}}
+
+/* Spinner */
+.spinner-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:14px}
+.spinner{width:32px;height:32px;border:3px solid var(--border-light);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner-text{font-size:.82rem;color:var(--text-muted)}
+
+/* Empty state */
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.empty-state .empty-icon{font-size:2.2rem;margin-bottom:8px}
+.empty-state p{font-size:.88rem}
+
+/* Guide sections */
+.guide-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text-dim);font-size:.82rem;margin-top:10px;padding:6px 0;background:none;border:none;font-family:var(--font)}
+.guide-toggle:hover{color:var(--text)}
+.guide-content{display:none;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:8px;font-size:.82rem;color:var(--text-dim);line-height:1.7}
+.guide-content.open{display:block}
+.guide-content ol{padding-left:18px}
+.guide-content li{margin-bottom:4px}
+.guide-content code{font-family:var(--mono);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px;font-size:.78rem}
+
+/* Test section */
+.test-section{margin-top:20px;padding:16px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.test-section h4{font-size:.9rem;font-weight:600;margin-bottom:10px}
+.test-results{margin-top:10px;padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--mono);font-size:.82rem;white-space:pre-wrap;max-height:200px;overflow-y:auto;display:none}
+
+/* Color picker wrapper */
+.color-input-wrap{display:flex;align-items:center;gap:10px}
+.color-input-wrap input[type="color"]{width:40px;height:34px;border:1px solid var(--border-light);border-radius:var(--radius-sm);background:none;cursor:pointer;padding:2px}
+.color-input-wrap .form-input{flex:1}
+
+/* Responsive */
+@media(max-width:768px){
+  .header-nav{display:none;position:absolute;top:56px;left:0;right:0;background:var(--bg-card);border-bottom:1px solid var(--border);padding:12px 20px;flex-direction:column;gap:8px}
+  .header-nav.open{display:flex}
+  .hamburger{display:block}
+  .tab-grid{grid-template-columns:repeat(3,1fr);gap:8px}
+  .tab-btn{padding:12px 6px}
+  .tab-icon{font-size:1.4rem}
+  .tab-label{font-size:.7rem}
+  .form-row{grid-template-columns:1fr}
+  .connection-item{flex-direction:column;align-items:flex-start}
+  .connection-actions{width:100%}
+  .item-row{flex-direction:column}
+  .item-actions{width:100%}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .main{padding:16px}
+}
+</style>
 </head>
 <body>
-    <div id="root"></div>
-    <script type="text/babel">
-        var useState = React.useState, useEffect = React.useEffect, useCallback = React.useCallback;
-        function getToken() { return localStorage.getItem('sentinel_token'); }
-        function getUser() { return localStorage.getItem('sentinel_user'); }
-        function logout() { localStorage.removeItem('sentinel_token'); localStorage.removeItem('sentinel_user'); window.location.href = '/login'; }
 
-        var API = {
-            base: '/api/v1',
-            opts: function() { return { headers: {'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json'} }; },
-            get: function(path) { return fetch(this.base + path, this.opts()).then(function(r) { if (r.status === 401) { logout(); throw new Error('Session expired'); } if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Request failed (' + r.status + ')'); }, function() { throw new Error('Request failed (' + r.status + ')'); }); return r.json(); }); },
-            post: function(path, body) { return fetch(this.base + path, Object.assign({}, this.opts(), { method: 'POST', body: JSON.stringify(body) })).then(function(r) { if (r.status === 401) { logout(); throw new Error('Session expired'); } if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Request failed (' + r.status + ')'); }, function() { throw new Error('Request failed (' + r.status + ')'); }); return r.json(); }); },
-            del: function(path) { return fetch(this.base + path, Object.assign({}, this.opts(), { method: 'DELETE' })).then(function(r) { if (r.status === 401) { logout(); throw new Error('Session expired'); } if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Request failed (' + r.status + ')'); }, function() { throw new Error('Request failed (' + r.status + ')'); }); return r.json(); }); },
-            patch: function(path, body) { return fetch(this.base + path, Object.assign({}, this.opts(), { method: 'PATCH', body: JSON.stringify(body) })).then(function(r) { if (r.status === 401) { logout(); throw new Error('Session expired'); } if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Request failed (' + r.status + ')'); }, function() { throw new Error('Request failed (' + r.status + ')'); }); return r.json(); }); }
-        };
+<header class="header">
+  <div class="header-left">
+    <a href="/dashboard" class="logo">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 2L4 8v8c0 7.18 5.12 13.9 12 16 6.88-2.1 12-8.82 12-16V8L16 2z" fill="#dc2626" opacity=".15"/>
+        <path d="M16 2L4 8v8c0 7.18 5.12 13.9 12 16 6.88-2.1 12-8.82 12-16V8L16 2z" stroke="#dc2626" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="16" cy="14" r="4" stroke="#fff" stroke-width="1.5"/>
+        <path d="M16 10v4l2.5 1.5" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      SENTINEL
+    </a>
+    <button class="hamburger" onclick="document.querySelector('.header-nav').classList.toggle('open')">&#9776;</button>
+  </div>
+  <nav class="header-nav">
+    <a href="/dashboard"><button>Back to Dashboard</button></a>
+    <button onclick="logout()">Logout</button>
+  </nav>
+</header>
 
-        function App() {
-            var _tab = useState('connections');
-            var tab = _tab[0], setTab = _tab[1];
-            var _conns = useState([]);
-            var conns = _conns[0], setConns = _conns[1];
-            var _scans = useState([]);
-            var scans = _scans[0], setScans = _scans[1];
-            var _team = useState([]);
-            var team = _team[0], setTeam = _team[1];
-            var _invites = useState([]);
-            var invites = _invites[0], setInvites = _invites[1];
-            var _inviteEmail = useState('');
-            var inviteEmail = _inviteEmail[0], setInviteEmail = _inviteEmail[1];
-            var _inviteLoading = useState(false);
-            var inviteLoading = _inviteLoading[0], setInviteLoading = _inviteLoading[1];
-            var _inviteRole = useState('friend');
-            var inviteRole = _inviteRole[0], setInviteRole = _inviteRole[1];
-            var _copiedInviteId = useState(null);
-            var copiedInviteId = _copiedInviteId[0], setCopiedInviteId = _copiedInviteId[1];
-            var _loading = useState(true);
-            var loading = _loading[0], setLoading = _loading[1];
-            var _showAdd = useState(false);
-            var showAdd = _showAdd[0], setShowAdd = _showAdd[1];
-            var _toast = useState(null);
-            var toast = _toast[0], setToast = _toast[1];
-            var _scanningId = useState('');
-            var scanningId = _scanningId[0], setScanningId = _scanningId[1];
+<main class="main">
+  <div class="tab-grid" id="tabGrid">
+    <div class="tab-btn active" data-tab="connections"><div class="tab-icon">📧</div><div class="tab-label">Email Connections</div></div>
+    <div class="tab-btn" data-tab="scans"><div class="tab-icon">📋</div><div class="tab-label">Scan History</div></div>
+    <div class="tab-btn" data-tab="team"><div class="tab-icon">👥</div><div class="tab-label">Team</div></div>
+    <div class="tab-btn" data-tab="reports"><div class="tab-icon">📊</div><div class="tab-label">Reports</div></div>
+    <div class="tab-btn" data-tab="branding"><div class="tab-icon">🎨</div><div class="tab-label">Branding</div></div>
+    <div class="tab-btn" data-tab="rules"><div class="tab-icon">⚡</div><div class="tab-label">Rules</div></div>
+    <div class="tab-btn" data-tab="alerts"><div class="tab-icon">🔔</div><div class="tab-label">Alerts</div></div>
+    <div class="tab-btn" data-tab="intel"><div class="tab-icon">🧠</div><div class="tab-label">Intel</div></div>
+    <div class="tab-btn" data-tab="simulations"><div class="tab-icon">🎯</div><div class="tab-label">Simulations</div></div>
+  </div>
 
-            var _schedule = useState({enabled:false, frequency:'monthly', recipients:[], last_sent:null});
-            var schedule = _schedule[0], setSchedule = _schedule[1];
-            var _schedLoading = useState(false);
-            var schedLoading = _schedLoading[0], setSchedLoading = _schedLoading[1];
+  <!-- ==================== 1. EMAIL CONNECTIONS ==================== -->
+  <div class="tab-panel active" id="panel-connections">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Email Connections</div>
+        <button class="btn btn-primary" onclick="openModal('addConnectionModal')">+ Add Connection</button>
+      </div>
+      <div id="connectionsList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading connections...</div></div></div>
+    </div>
+  </div>
 
-            var _branding = useState({logo_url:'', primary_color:'#DC2626', secondary_color:'#7F1D1D', org_display_name:''});
-            var branding = _branding[0], setBranding = _branding[1];
+  <!-- ==================== 2. SCAN HISTORY ==================== -->
+  <div class="tab-panel" id="panel-scans">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Scan History</div>
+      </div>
+      <div id="scansList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading scan history...</div></div></div>
+    </div>
+  </div>
 
-            var _rules = useState([]);
-            var rules = _rules[0], setRules = _rules[1];
-            var _newRule = useState({name:'', pattern:'', rule_type:'keyword', action:'flag', description:''});
-            var newRule = _newRule[0], setNewRule = _newRule[1];
-            var _ruleTestText = useState('');
-            var ruleTestText = _ruleTestText[0], setRuleTestText = _ruleTestText[1];
-            var _ruleMatches = useState(null);
-            var ruleMatches = _ruleMatches[0], setRuleMatches = _ruleMatches[1];
+  <!-- ==================== 3. TEAM ==================== -->
+  <div class="tab-panel" id="panel-team">
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">Invite Team Member</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div class="form-group" style="flex:1;min-width:200px;margin:0">
+          <label class="form-label">Email Address</label>
+          <input type="email" class="form-input" id="inviteEmail" placeholder="teammate@company.com">
+        </div>
+        <div class="form-group" style="min-width:160px;margin:0">
+          <label class="form-label">Role</label>
+          <select class="form-select" id="inviteRole">
+            <option value="friend">Friend (Lite Access)</option>
+            <option value="member">Member (Full Access)</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="sendInvite()">Send Invite</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">Pending Invites</div>
+      </div>
+      <div id="invitesList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading invites...</div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Team Members</div>
+      </div>
+      <div id="membersList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading members...</div></div></div>
+    </div>
+  </div>
 
-            var _alertConfig = useState({enabled:false, webhook_url:'', platform:'slack', alert_level:'malicious'});
-            var alertConfig = _alertConfig[0], setAlertConfig = _alertConfig[1];
-            var _alertTestLoading = useState(false);
-            var alertTestLoading = _alertTestLoading[0], setAlertTestLoading = _alertTestLoading[1];
+  <!-- ==================== 4. REPORTS ==================== -->
+  <div class="tab-panel" id="panel-reports">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Scheduled Reports</div>
+      </div>
+      <div id="reportsContent"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading report settings...</div></div></div>
+    </div>
+  </div>
 
-            var _intel = useState([]);
-            var intel = _intel[0], setIntel = _intel[1];
-            var _intelStats = useState({});
-            var intelStats = _intelStats[0], setIntelStats = _intelStats[1];
-            var _newIntel = useState({indicator:'', indicator_type:'domain', category:'phishing', notes:''});
-            var newIntel = _newIntel[0], setNewIntel = _newIntel[1];
+  <!-- ==================== 5. BRANDING ==================== -->
+  <div class="tab-panel" id="panel-branding">
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">White-Label Branding</div>
+      </div>
+      <div id="brandingContent"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading branding settings...</div></div></div>
+    </div>
+    <div class="card" id="brandingPreviewCard" style="display:none">
+      <div class="card-header">
+        <div class="card-title">Live Preview</div>
+      </div>
+      <div id="brandingPreview" style="padding:16px;border:1px dashed var(--border-light);border-radius:var(--radius-sm);min-height:80px;display:flex;align-items:center;gap:12px"></div>
+    </div>
+  </div>
 
-            var _sims = useState([]);
-            var sims = _sims[0], setSims = _sims[1];
-            var _newSim = useState({name:'', template_type:'credential_harvest', target_user_ids:[], subject:'', sender_name:''});
-            var newSim = _newSim[0], setNewSim = _newSim[1];
-            var _selectedSim = useState(null);
-            var selectedSim = _selectedSim[0], setSelectedSim = _selectedSim[1];
+  <!-- ==================== 6. RULES ==================== -->
+  <div class="tab-panel" id="panel-rules">
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">Create Detection Rule</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="ruleName" placeholder="Rule name"></div>
+        <div class="form-group"><label class="form-label">Pattern</label><input type="text" class="form-input" id="rulePattern" placeholder="e.g. urgent-wire-transfer"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="ruleType"><option value="keyword">Keyword</option><option value="regex">Regex</option><option value="domain">Domain</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Action</label>
+          <select class="form-select" id="ruleAction"><option value="flag">Flag</option><option value="whitelist">Whitelist</option><option value="block">Block</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><input type="text" class="form-input" id="ruleDesc" placeholder="Optional description"></div>
+      <button class="btn btn-primary" onclick="createRule()">Create Rule</button>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">Active Rules</div>
+      </div>
+      <div id="rulesList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading rules...</div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px">Test Rules</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input type="text" class="form-input" id="ruleTestInput" placeholder="Enter text to test against rules..." style="flex:1;min-width:200px">
+        <button class="btn btn-secondary" onclick="testRules()">Test</button>
+      </div>
+      <div class="test-results" id="ruleTestResults"></div>
+    </div>
+  </div>
 
-            var showToast = function(type, msg) {
-                setToast({type:type, msg:msg});
-                setTimeout(function() { setToast(null); }, 3000);
-            };
+  <!-- ==================== 7. ALERTS ==================== -->
+  <div class="tab-panel" id="panel-alerts">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Webhook Alerts</div>
+      </div>
+      <div id="alertsContent"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading alert settings...</div></div></div>
+    </div>
+  </div>
 
-            var fetchConns = useCallback(function() {
-                API.get('/connections').then(function(r) { setConns(r.connections || []); setLoading(false); }).catch(function() { setLoading(false); });
-            }, []);
-            var fetchScans = useCallback(function() {
-                API.get('/scans').then(function(r) { setScans(r.jobs || []); }).catch(function() {});
-            }, []);
-            var fetchTeam = useCallback(function() {
-                API.get('/team').then(function(r) { setTeam(r.members || []); }).catch(function() {});
-            }, []);
-            var fetchInvites = useCallback(function() {
-                API.get('/invites').then(function(r) { setInvites(r.invites || []); }).catch(function() {});
-            }, []);
-            var fetchSchedule = useCallback(function() {
-                API.get('/report-schedule').then(function(r) { setSchedule(r); }).catch(function() {});
-            }, []);
-            var fetchBranding = useCallback(function() {
-                API.get('/branding').then(function(r) { setBranding(r); }).catch(function() {});
-            }, []);
-            var fetchRules = useCallback(function() {
-                API.get('/rules').then(function(r) { setRules(r.rules || []); }).catch(function() {});
-            }, []);
-            var fetchAlertConfig = useCallback(function() {
-                API.get('/alerts/config').then(function(r) { setAlertConfig(r); }).catch(function() {});
-            }, []);
-            var fetchIntel = useCallback(function() {
-                API.get('/intel').then(function(r) { setIntel(r.items || []); }).catch(function() {});
-                API.get('/intel/stats').then(function(r) { setIntelStats(r); }).catch(function() {});
-            }, []);
-            var fetchSims = useCallback(function() {
-                API.get('/simulations').then(function(r) { setSims(r.simulations || []); }).catch(function() {});
-            }, []);
+  <!-- ==================== 8. INTEL ==================== -->
+  <div class="tab-panel" id="panel-intel">
+    <div id="intelStatsGrid" class="stats-grid" style="margin-bottom:20px"></div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">Submit Threat Indicator</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Indicator</label><input type="text" class="form-input" id="intelIndicator" placeholder="e.g. evil-phish.com"></div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select class="form-select" id="intelType"><option value="domain">Domain</option><option value="url">URL</option><option value="ip">IP Address</option><option value="hash">Hash</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select class="form-select" id="intelCategory"><option value="phishing">Phishing</option><option value="phishing_sender">Phishing Sender</option><option value="phishing_url">Phishing URL</option><option value="malware">Malware</option><option value="credential_harvest">Credential Harvest</option><option value="other">Other</option></select>
+      </div>
+      <button class="btn btn-primary" onclick="submitIntel()">Submit Indicator</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Threat Feed</div>
+      </div>
+      <div id="intelFeedList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading intel feed...</div></div></div>
+    </div>
+  </div>
 
-            useEffect(function() {
-                if (!getToken()) { window.location.href = '/login'; return; }
-                fetchConns(); fetchScans(); fetchTeam(); fetchInvites(); fetchSchedule(); fetchBranding(); fetchRules(); fetchAlertConfig(); fetchIntel(); fetchSims();
-            }, [fetchConns, fetchScans, fetchTeam, fetchInvites, fetchSchedule, fetchBranding, fetchRules, fetchAlertConfig, fetchIntel, fetchSims]);
+  <!-- ==================== 9. SIMULATIONS ==================== -->
+  <div class="tab-panel" id="panel-simulations">
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <div class="card-title">Create Simulation</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Campaign Name</label><input type="text" class="form-input" id="simName" placeholder="Q3 Phishing Test"></div>
+        <div class="form-group">
+          <label class="form-label">Template Type</label>
+          <select class="form-select" id="simTemplate"><option value="credential_harvest">Credential Harvest</option><option value="urgent_request">Urgent Request</option><option value="package_delivery">Package Delivery</option><option value="tax_refund">Tax Refund</option><option value="it_update">IT Update</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Target User IDs (comma separated)</label><input type="text" class="form-input" id="simTargets" placeholder="1, 2, 3"></div>
+      <button class="btn btn-primary" onclick="createSimulation()">Create Campaign</button>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Campaigns</div>
+      </div>
+      <div id="simList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading simulations...</div></div></div>
+    </div>
+  </div>
+</main>
 
-            var btnBase = { padding:'8px 16px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', border:'none', fontFamily:'Inter', transition:'all 0.2s' };
-            var btnRed = Object.assign({}, btnBase, { background:'linear-gradient(135deg,#DC2626,#991B1B)', color:'#fff' });
-            var btnDark = Object.assign({}, btnBase, { background:'#161616', color:'#a0a0a0', border:'1px solid #282828' });
-            var inputStyle = { width:'100%', padding:'10px 14px', background:'#0a0a0a', border:'1px solid #222', borderRadius:8, color:'#f5f5f5', fontSize:13, fontFamily:'Inter', outline:'none', transition:'border-color 0.2s' };
-            var cardStyle = { background:'linear-gradient(145deg, #111, #0d0d0d)', border:'1px solid #1a1a1a', borderRadius:14, padding:24, marginBottom:16 };
+<!-- ==================== MODALS ==================== -->
+<div class="modal-overlay" id="addConnectionModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Email Connection</h3>
+      <button class="modal-close" onclick="closeModal('addConnectionModal')">&times;</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Connection Label</label>
+      <input type="text" class="form-input" id="connLabel" placeholder="My Gmail">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Provider</label>
+      <select class="form-select" id="connProvider" onchange="onProviderChange()">
+        <option value="gmail">Gmail</option>
+        <option value="outlook">Outlook / Microsoft 365</option>
+        <option value="yahoo">Yahoo Mail</option>
+        <option value="custom">Custom (IMAP)</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">IMAP Host</label><input type="text" class="form-input" id="connHost" placeholder="imap.gmail.com"></div>
+      <div class="form-group"><label class="form-label">Port</label><input type="number" class="form-input" id="connPort" value="993"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Email Address</label><input type="email" class="form-input" id="connEmail" placeholder="you@gmail.com"></div>
+      <div class="form-group"><label class="form-label">App Password</label><input type="password" class="form-input" id="connPassword" placeholder="xxxx-xxxx-xxxx-xxxx"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Folder</label><input type="text" class="form-input" id="connFolder" value="INBOX"></div>
+      <div class="form-group"><label class="form-label">Scan Interval (minutes)</label><input type="number" class="form-input" id="connInterval" value="60" min="15"></div>
+    </div>
 
-            var tabs = [
-                {id:'connections', label:'Email Connections', icon:'\\u260E'},
-                {id:'scans', label:'Scan History', icon:'\\u23F1'},
-                {id:'team', label:'Team', icon:'\\u2465'},
-                {id:'reports', label:'Reports', icon:'\\u2602'},
-                {id:'branding', label:'Branding', icon:'\\u2728'},
-                {id:'rules', label:'Rules', icon:'\\u2699'},
-                {id:'alerts', label:'Alerts', icon:'\\u26A0'},
-                {id:'intel', label:'Threat Intel', icon:'\\u1F6E1'},
-                {id:'simulations', label:'Simulations', icon:'\\u2694'}
-            ];
+    <!-- Gmail Guide -->
+    <div id="gmailGuide">
+      <button class="guide-toggle" onclick="toggleGuide('gmailGuideContent', this)">&#9662; How to get a Gmail App Password</button>
+      <div class="guide-content" id="gmailGuideContent">
+        <ol>
+          <li>Go to <a href="https://myaccount.google.com/security" target="_blank">Google Account Security</a>.</li>
+          <li>Ensure <strong>2-Step Verification</strong> is enabled on your account.</li>
+          <li>Go to <a href="https://myaccount.google.com/apppasswords" target="_blank">App Passwords</a>.</li>
+          <li>Select app: <strong>Mail</strong>, select device: <strong>Other (Custom name)</strong>, type "SENTINEL".</li>
+          <li>Click <strong>Generate</strong>. Copy the 16-character password and paste it above.</li>
+        </ol>
+        <p style="margin-top:8px">Note: IMAP must be enabled in Gmail Settings &rarr; Forwarding and POP/IMAP.</p>
+      </div>
+    </div>
 
-            return React.createElement('div', { style:{minHeight:'100vh'} },
-                React.createElement('header', { style:{background:'rgba(17,17,17,0.9)',backdropFilter:'blur(20px)',borderBottom:'1px solid #1a1a1a',position:'sticky',top:0,zIndex:50} },
-                    React.createElement('div', { className:'s-wrap', style:{maxWidth:1000,margin:'0 auto',padding:'0 24px',display:'flex',alignItems:'center',justifyContent:'space-between',height:64} },
-                        React.createElement('div', { style:{display:'flex',alignItems:'center',gap:10} },
-                            React.createElement('div', { dangerouslySetInnerHTML:{__html:'<svg viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="31"><path d="M20 2L4 10v12c0 11 7.2 21.3 16 24 8.8-2.7 16-13 16-24V10L20 2z" fill="url(#lgS)" stroke="#991B1B" stroke-width="1.5"/><path d="M20 10v8m0 0v8m0-8l-4-4m4 4l4-4" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="lgS" x1="4" y1="2" x2="36" y2="46"><stop stop-color="#DC2626"/><stop offset="1" stop-color="#7F1D1D"/></linearGradient></defs></svg>'} }),
-                            React.createElement('span', { style:{fontSize:16,fontWeight:800} }, 'Settings')
-                        ),
-                        React.createElement('button', { className:'s-hamburger', onClick:function() { document.querySelector('.s-nav').classList.toggle('open'); } }, '\u2630'),
-                        React.createElement('div', { className:'s-nav', style:{display:'flex',gap:8,alignItems:'center'} },
-                            React.createElement('button', { onClick:function() { window.location.href='/dashboard'; }, style:btnDark }, 'Back to Dashboard'),
-                            React.createElement('button', { onClick:logout, style:Object.assign({}, btnBase, {background:'transparent',color:'#666',border:'1px solid #222'}) }, 'Logout')
-                        )
-                    )
-                ),
-                React.createElement('main', { className:'s-main', style:{maxWidth:1000,margin:'0 auto',padding:'32px 24px'} },
-                    React.createElement('div', { className:'s-tabs', style:{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))',gap:10,marginBottom:32} },
-                        tabs.map(function(t) {
-                            var isActive = tab === t.id;
-                            return React.createElement('button', { key:t.id, onClick:function() { setTab(t.id); }, style:{
-                                display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-                                gap:6, padding:'16px 12px', borderRadius:12, fontSize:12, fontWeight:600,
-                                cursor:'pointer', border:'1px solid', fontFamily:'Inter', transition:'all 0.25s ease',
-                                background: isActive ? 'rgba(220,38,38,0.08)' : '#111',
-                                borderColor: isActive ? 'rgba(220,38,38,0.35)' : '#1e1e1e',
-                                color: isActive ? '#EF4444' : '#777',
-                                boxShadow: isActive ? '0 4px 20px rgba(220,38,38,0.12)' : 'none',
-                                transform: isActive ? 'translateY(-2px)' : 'none',
-                                minHeight:80,
-                            } },
-                                React.createElement('span', { style:{fontSize:22,lineHeight:1} }, t.icon),
-                                React.createElement('span', null, t.label)
-                            );
-                        })
-                    ),
-                    tab === 'connections' ? React.createElement('div', null,
-                        React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20} },
-                            React.createElement('h2', { style:{fontSize:20,fontWeight:700} }, 'Email Connections'),
-                            React.createElement('button', { onClick:function() { setShowAdd(true); }, style:btnRed }, '+ Add Connection')
-                        ),
-                        loading ? React.createElement('div', { style:{textAlign:'center',padding:40} }, React.createElement('div', { style:{width:32,height:32,border:'3px solid #1a1a1a',borderTopColor:'#DC2626',borderRadius:'50%',animation:'spin 0.8s linear infinite',margin:'0 auto 16px'} })) :
-                        conns.length === 0 ? React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{textAlign:'center',padding:'40px 0'} },
-                                React.createElement('div', { style:{fontSize:40,marginBottom:12,opacity:0.3} }, '\\u260E'),
-                                React.createElement('div', { style:{fontSize:16,fontWeight:700,marginBottom:6} }, 'No Email Connections'),
-                                React.createElement('div', { style:{fontSize:13,color:'#666',marginBottom:20} }, 'Connect your email inbox to automatically scan for phishing emails.'),
-                                React.createElement('button', { onClick:function() { setShowAdd(true); }, style:btnRed }, 'Add Your First Connection')
-                            )
-                        ) : conns.map(function(c) {
-                            return React.createElement('div', { key:c.id, className:'s-card-row', style:Object.assign({}, cardStyle, {display:'flex',justifyContent:'space-between',alignItems:'center'}) },
-                                    React.createElement('div', null,
-                                    React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
-                                        React.createElement('div', { style:{width:8,height:8,borderRadius:'50%',background:c.is_active?'#22C55E':'#666'} }),
-                                        React.createElement('span', { style:{fontSize:15,fontWeight:600} }, c.label)
-                                    ),
-                                    React.createElement('div', { style:{fontSize:12,color:'#666',marginTop:4} }, c.imap_username + ' @ ' + c.imap_host),
-                                    React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:2} }, 'Last scan: ' + (c.last_scan_at ? new Date(c.last_scan_at).toLocaleString() : 'Never') + ' | ' + (c.last_scan_count || 0) + ' emails found')
-                                ),
-                            React.createElement('div', { className:'s-invite-row', style:{display:'flex',gap:8} },
-                                    React.createElement('button', { onClick:function() {
-                                        setScanningId(c.id);
-                                        API.post('/scan/' + c.id, {}).then(function() { showToast('success', 'Scan started for ' + c.label + '. Check Dashboard for results.'); setScanningId(''); fetchConns(); }).catch(function(e) {
-                                            var msg = 'Scan failed';
-                                            if (e && e.message) { msg = e.message; }
-                                            showToast('error', msg);
-                                            setScanningId('');
-                                        });
-                                    }, disabled: scanningId === c.id, style:Object.assign({}, btnDark, {fontSize:11,padding:'6px 12px', opacity: scanningId === c.id ? 0.6 : 1, cursor: scanningId === c.id ? 'not-allowed' : 'pointer'}) }, scanningId === c.id ? 'Scanning...' : 'Scan Now'),
-                                    React.createElement('button', { onClick:function() {
-                                        API.del('/connections/' + c.id).then(function() { showToast('success', 'Connection removed'); fetchConns(); }).catch(function(e) { showToast('error', 'Failed to remove: ' + (e.message || 'Unknown')); });
-                                    }, style:Object.assign({}, btnBase, {background:'rgba(220,38,38,0.08)',border:'1px solid rgba(220,38,38,0.2)',color:'#FCA5A5',fontSize:11,padding:'6px 12px'}) }, 'Remove')
-                                )
-                            );
-                        })
-                    ) : tab === 'scans' ? React.createElement('div', null,
-                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:20} }, 'Scan History'),
-                        scans.length === 0 ? React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{textAlign:'center',padding:'40px 0',color:'#666',fontSize:14} }, 'No scans yet. Connect an email account and run a scan.')
-                        ) : scans.map(function(j) {
-                            var statusColors = {pending:'#EAB308',running:'#3B82F6',completed:'#22C55E',failed:'#EF4444'};
-                            return React.createElement('div', { key:j.id, style:Object.assign({}, cardStyle, {display:'flex',justifyContent:'space-between',alignItems:'center'}) },
-                                React.createElement('div', null,
-                                    React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
-                                        j.status === 'running' ? React.createElement('div', { style:{width:8,height:8,borderRadius:'50%',background:'#3B82F6',animation:'spin 1s linear infinite'} }) : null,
-                                        React.createElement('span', { style:{fontSize:14,fontWeight:600,textTransform:'capitalize'} }, j.status),
-                                        React.createElement('span', { style:{fontSize:11,color:statusColors[j.status]||'#666',padding:'2px 8px',borderRadius:4,background:(statusColors[j.status]||'#666')+'20'} }, j.status)
-                                    ),
-                                    React.createElement('div', { style:{fontSize:12,color:'#666',marginTop:4} }, (j.emails_found||0) + ' found, ' + (j.emails_analyzed||0) + ' analyzed'),
-                                    j.error_message ? React.createElement('div', { style:{fontSize:11,color:'#EF4444',marginTop:2} }, j.error_message) : null,
-                                    React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:2} }, new Date(j.created_at).toLocaleString())
-                                )
-                            );
-                        })
-                    ) : tab === 'alerts' ? React.createElement('div', null,
-                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Real-Time Webhook Alerts'),
-                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Get instant notifications in Slack, Discord, or Microsoft Teams when threats are detected.'),
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20} },
-                                React.createElement('div', { style:{display:'flex',alignItems:'center',gap:10} },
-                                    React.createElement('div', { style:{width:36,height:36,borderRadius:8,background:alertConfig.enabled?'rgba(34,197,94,0.12)':'rgba(102,102,102,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16} }, alertConfig.enabled ? '\\u2713' : '\\u25CB'),
-                                    React.createElement('div', null,
-                                        React.createElement('div', { style:{fontSize:14,fontWeight:600} }, 'Alert Notifications'),
-                                        React.createElement('div', { style:{fontSize:11,color:'#666',marginTop:2} }, alertConfig.enabled ? 'Active' : 'Disabled')
-                                    )
-                                ),
-                                React.createElement('button', { onClick:function() {
-                                    var next = Object.assign({}, alertConfig, {enabled:!alertConfig.enabled});
-                                    setAlertConfig(next);
-                                    API.post('/alerts/config', next).then(function() { showToast('success', next.enabled ? 'Alerts enabled' : 'Alerts disabled'); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                                }, style:{width:44,height:24,borderRadius:12,background:alertConfig.enabled?'linear-gradient(135deg,#22C55E,#166534)':'#333',border:'none',cursor:'pointer',position:'relative',transition:'all 0.2s'} },
-                                    React.createElement('div', { style:{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:alertConfig.enabled?23:3,transition:'all 0.2s'} })
-                                )
-                            ),
-                            React.createElement('div', { style:{marginBottom:16} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Platform'),
-                                React.createElement('select', { value:alertConfig.platform, onChange:function(e) { setAlertConfig(Object.assign({}, alertConfig, {platform:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
-                                    React.createElement('option', { value:'slack' }, 'Slack'),
-                                    React.createElement('option', { value:'discord' }, 'Discord'),
-                                    React.createElement('option', { value:'teams' }, 'Microsoft Teams')
-                                )
-                            ),
-                            React.createElement('div', { style:{marginBottom:16} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Alert Threshold'),
-                                React.createElement('select', { value:alertConfig.alert_level, onChange:function(e) { setAlertConfig(Object.assign({}, alertConfig, {alert_level:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
-                                    React.createElement('option', { value:'malicious' }, 'Malicious only (recommended)'),
-                                    React.createElement('option', { value:'suspicious' }, 'Malicious + Suspicious')
-                                )
-                            ),
-                            React.createElement('div', { style:{marginBottom:16} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Webhook URL'),
-                                React.createElement('input', { value:alertConfig.webhook_url||'', onChange:function(e) { setAlertConfig(Object.assign({}, alertConfig, {webhook_url:e.target.value})); }, placeholder:alertConfig.platform==='slack'?'https://hooks.slack.com/services/...':alertConfig.platform==='discord'?'https://discord.com/api/webhooks/...':'https://outlook.office.com/webhook/...', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'JetBrains Mono'} })
-                            ),
-                            React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:10,padding:14,marginBottom:16} },
-                                React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#888',marginBottom:6} }, 'How to get a webhook URL:'),
-                                React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.6} },
-                                    alertConfig.platform === 'slack' ? 'In Slack, go to Apps > Incoming Webhooks > Add to Slack. Choose a channel and copy the Webhook URL.' :
-                                    alertConfig.platform === 'discord' ? 'In Discord, go to Server Settings > Integrations > Webhooks > New Webhook. Choose a channel and copy the URL.' :
-                                    'In Teams, go to a channel > ... > Connectors > Incoming Webhook. Configure and copy the URL.'
-                                )
-                            ),
-                            React.createElement('div', { style:{display:'flex',gap:8} },
-                                React.createElement('button', { onClick:function() {
-                                    API.post('/alerts/config', alertConfig).then(function() { showToast('success', 'Alert config saved'); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                                }, style:btnRed }, 'Save Config'),
-                                React.createElement('button', { onClick:function() {
-                                    setAlertTestLoading(true);
-                                    API.post('/alerts/test', {}).then(function() { showToast('success', 'Test alert sent! Check your channel.'); }).catch(function(e) { showToast('error', e.message || 'Failed to send test'); }).finally(function() { setAlertTestLoading(false); });
-                                }, disabled:alertTestLoading||!alertConfig.webhook_url, style:Object.assign({}, btnDark, {opacity:(alertTestLoading||!alertConfig.webhook_url)?0.5:1}) }, alertTestLoading ? 'Sending...' : 'Send Test Alert')
-                            )
-                        )
-                    ) : tab === 'intel' ? React.createElement('div', null,
-                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Threat Intelligence Feed'),
-                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Shared IOC database. Threats detected by any SENTINEL org are cross-referenced during analysis.'),
-                        React.createElement('div', { className:'stats-grid', style:{gridTemplateColumns:'repeat(4, 1fr)',marginBottom:20} },
-                            React.createElement('div', { style:cardStyle },
-                                React.createElement('div', { style:{fontSize:11,color:'#888',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:4} }, 'Total IOCs'),
-                                React.createElement('div', { style:{fontSize:24,fontWeight:800,fontFamily:'JetBrains Mono',color:'#DC2626'} }, intelStats.total_indicators||0)
-                            ),
-                            React.createElement('div', { style:cardStyle },
-                                React.createElement('div', { style:{fontSize:11,color:'#888',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:4} }, 'Verified'),
-                                React.createElement('div', { style:{fontSize:24,fontWeight:800,fontFamily:'JetBrains Mono',color:'#22C55E'} }, intelStats.verified||0)
-                            ),
-                            React.createElement('div', { style:cardStyle },
-                                React.createElement('div', { style:{fontSize:11,color:'#888',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:4} }, 'Domains'),
-                                React.createElement('div', { style:{fontSize:24,fontWeight:800,fontFamily:'JetBrains Mono',color:'#3B82F6'} }, (intelStats.by_type||{}).domain||0)
-                            ),
-                            React.createElement('div', { style:cardStyle },
-                                React.createElement('div', { style:{fontSize:11,color:'#888',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:4} }, 'URLs'),
-                                React.createElement('div', { style:{fontSize:24,fontWeight:800,fontFamily:'JetBrains Mono',color:'#EAB308'} }, (intelStats.by_type||{}).url||0)
-                            )
-                        ),
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Submit Indicator'),
-                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'2fr 1fr 1fr',gap:12,marginBottom:12} },
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Indicator (domain, URL, IP)'),
-                                    React.createElement('input', { value:newIntel.indicator, onChange:function(e) { setNewIntel(Object.assign({}, newIntel, {indicator:e.target.value})); }, placeholder:'evil-domain.com', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'JetBrains Mono'} })
-                                ),
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Type'),
-                                    React.createElement('select', { value:newIntel.indicator_type, onChange:function(e) { setNewIntel(Object.assign({}, newIntel, {indicator_type:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
-                                        React.createElement('option', { value:'domain' }, 'Domain'),
-                                        React.createElement('option', { value:'url' }, 'URL'),
-                                        React.createElement('option', { value:'ip' }, 'IP Address'),
-                                        React.createElement('option', { value:'hash' }, 'File Hash')
-                                    )
-                                ),
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Category'),
-                                    React.createElement('select', { value:newIntel.category, onChange:function(e) { setNewIntel(Object.assign({}, newIntel, {category:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
-                                        React.createElement('option', { value:'phishing' }, 'Phishing'),
-                                        React.createElement('option', { value:'phishing_sender' }, 'Phishing Sender'),
-                                        React.createElement('option', { value:'phishing_url' }, 'Phishing URL'),
-                                        React.createElement('option', { value:'malware' }, 'Malware'),
-                                        React.createElement('option', { value:'credential_harvest' }, 'Credential Harvest'),
-                                        React.createElement('option', { value:'other' }, 'Other')
-                                    )
-                                )
-                            ),
-                            React.createElement('button', { onClick:function() {
-                                if (!newIntel.indicator) { showToast('error', 'Indicator required'); return; }
-                                API.post('/intel', newIntel).then(function() { showToast('success', 'Indicator submitted'); setNewIntel({indicator:'', indicator_type:'domain', category:'phishing', notes:''}); fetchIntel(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                            }, style:btnRed }, '+ Submit Indicator')
-                        ),
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Feed (' + intel.length + ' indicators)'),
-                            intel.length === 0 ? React.createElement('div', { style:{textAlign:'center',padding:'40px 0',color:'#666',fontSize:14} }, 'No indicators yet. Submit one above or they will be auto-added when threats are detected.') :
-                            React.createElement('div', { style:{maxHeight:400,overflowY:'auto'} },
-                                intel.slice(0, 30).map(function(item) {
-                                    var typeColors = {domain:'#3B82F6',url:'#EAB308',ip:'#A855F7',hash:'#22C55E'};
-                                    return React.createElement('div', { key:item.id, style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,marginBottom:6} },
-                                        React.createElement('div', null,
-                                            React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
-                                                React.createElement('span', { style:{fontSize:10,fontWeight:700,color:typeColors[item.indicator_type]||'#888',background:(typeColors[item.indicator_type]||'#888')+'20',padding:'2px 6px',borderRadius:4,textTransform:'uppercase'} }, item.indicator_type),
-                                                React.createElement('span', { style:{fontSize:13,fontFamily:'JetBrains Mono',fontWeight:500} }, item.indicator),
-                                                item.verified ? React.createElement('span', { style:{fontSize:9,color:'#22C55E',background:'rgba(34,197,94,0.12)',padding:'1px 6px',borderRadius:4} }, 'VERIFIED') : null
-                                            ),
-                                            React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:2} }, 'Reported ' + (item.report_count||1) + ' time(s) | ' + item.category + ' | ' + new Date(item.first_seen||item.created_at).toLocaleDateString())
-                                        )
-                                    );
-                                })
-                            )
-                        )
-                    ) : tab === 'simulations' ? React.createElement('div', null,
-                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Phishing Simulation Training'),
-                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Send simulated phishing emails to your team. Track who clicks and generate training reports.'),
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Create Campaign'),
-                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12} },
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Campaign Name'),
-                                    React.createElement('input', { value:newSim.name, onChange:function(e) { setNewSim(Object.assign({}, newSim, {name:e.target.value})); }, placeholder:'Q3 Security Test', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
-                                ),
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Template'),
-                                    React.createElement('select', { value:newSim.template_type, onChange:function(e) { setNewSim(Object.assign({}, newSim, {template_type:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
-                                        React.createElement('option', { value:'credential_harvest' }, 'Credential Harvest (fake login)'),
-                                        React.createElement('option', { value:'urgent_request' }, 'Urgent Request (CEO fraud)'),
-                                        React.createElement('option', { value:'package_delivery' }, 'Package Delivery Notice'),
-                                        React.createElement('option', { value:'tax_refund' }, 'Tax Refund / Government'),
-                                        React.createElement('option', { value:'it_update' }, 'IT Password Reset')
-                                    )
-                                )
-                            ),
-                            React.createElement('div', { style:{marginBottom:12} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Target Users (IDs, comma separated — leave empty for all)'),
-                                React.createElement('input', { value:(newSim.target_user_ids||[]).join(', '), onChange:function(e) { setNewSim(Object.assign({}, newSim, {target_user_ids:e.target.value.split(',').map(function(s){return s.trim();}).filter(Boolean)})); }, placeholder:'user-abc123, user-def456', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'JetBrains Mono'} })
-                            ),
-                            React.createElement('button', { onClick:function() {
-                                if (!newSim.name) { showToast('error', 'Name required'); return; }
-                                API.post('/simulations', newSim).then(function() { showToast('success', 'Campaign created'); setNewSim({name:'', template_type:'credential_harvest', target_user_ids:[], subject:'', sender_name:''}); fetchSims(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                            }, style:btnRed }, '+ Create Campaign')
-                        ),
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Campaigns (' + sims.length + ')'),
-                            sims.length === 0 ? React.createElement('div', { style:{textAlign:'center',padding:'40px 0',color:'#666',fontSize:14} }, 'No campaigns yet. Create one above to get started.') :
-                            sims.map(function(s) {
-                                var statusColors = {draft:'#888',active:'#22C55E',completed:'#3B82F6'};
-                                var riskScore = s.sent_count > 0 ? Math.round(((s.clicked_count||0) + (s.credentials_count||0)) / Math.max(s.sent_count,1) * 100) : 0;
-                                return React.createElement('div', { key:s.id, style:{padding:'14px 16px',background:'#0a0a0a',border:'1px solid #222',borderRadius:10,marginBottom:8} },
-                                    React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10} },
-                                        React.createElement('div', null,
-                                            React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
-                                                React.createElement('span', { style:{fontSize:14,fontWeight:600} }, s.name),
-                                                React.createElement('span', { style:{fontSize:10,fontWeight:700,color:statusColors[s.status]||'#888',background:(statusColors[s.status]||'#888')+'20',padding:'2px 8px',borderRadius:4,textTransform:'uppercase'} }, s.status)
-                                            ),
-                                            React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:2} }, 'Template: ' + s.template_type.replace(/_/g,' ') + ' | Created: ' + new Date(s.created_at).toLocaleDateString())
-                                        ),
-                                        React.createElement('div', { style:{display:'flex',gap:6} },
-                                            s.status === 'draft' ? React.createElement('button', { onClick:function() {
-                                                API.post('/simulations/' + s.id + '/send', {}).then(function() { showToast('success', 'Campaign activated'); fetchSims(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                                            }, style:Object.assign({}, btnRed, {fontSize:11,padding:'5px 10px'}) }, 'Send') : null,
-                                            s.status === 'active' ? React.createElement('button', { onClick:function() {
-                                                API.post('/simulations/' + s.id + '/end', {}).then(function() { showToast('success', 'Campaign ended'); fetchSims(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                                            }, style:Object.assign({}, btnDark, {fontSize:11,padding:'5px 10px'}) }, 'End') : null
-                                        )
-                                    ),
-                                    React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8} },
-                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
-                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:'#888'} }, s.sent_count||0),
-                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Sent')
-                                        ),
-                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
-                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:'#3B82F6'} }, s.opened_count||0),
-                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Opened')
-                                        ),
-                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
-                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:'#EAB308'} }, s.clicked_count||0),
-                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Clicked')
-                                        ),
-                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
-                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:'#EF4444'} }, s.credentials_count||0),
-                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Credentials')
-                                        ),
-                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
-                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:riskScore>50?'#EF4444':riskScore>20?'#EAB308':'#22C55E'} }, riskScore + '%'),
-                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Risk Score')
-                                        )
-                                    )
-                                );
-                            })
-                        )
-                    ) : tab === 'team' ? React.createElement('div', null,
-                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Team Members'),
-                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Manage who has access to your organization.'),
+    <!-- Outlook Guide -->
+    <div id="outlookGuide">
+      <button class="guide-toggle" onclick="toggleGuide('outlookGuideContent', this)">&#9662; How to get an Outlook App Password</button>
+      <div class="guide-content" id="outlookGuideContent">
+        <ol>
+          <li>Go to <a href="https://account.microsoft.com/security" target="_blank">Microsoft Account Security</a>.</li>
+          <li>Click <strong>Advanced security options</strong>.</li>
+          <li>Under <strong>App passwords</strong>, click <strong>Create a new app password</strong>.</li>
+          <li>Copy the generated password and paste it above.</li>
+        </ol>
+        <p style="margin-top:8px">For Microsoft 365 / Exchange, you may need admin-generated app passwords or OAuth. IMAP host is typically <code>outlook.office365.com</code>, port <code>993</code>.</p>
+      </div>
+    </div>
 
-                        React.createElement('div', { style:Object.assign({}, cardStyle, {marginBottom:24}) },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:12} }, 'Invite Member'),
-                            React.createElement('div', { style:{display:'flex',gap:8,flexWrap:'wrap'} },
-                                React.createElement('input', { value:inviteEmail, onChange:function(e) { setInviteEmail(e.target.value); }, placeholder:'teammate@company.com', style:Object.assign({}, inputStyle, {flex:1,minWidth:200}) }),
-                                React.createElement('select', { value:inviteRole, onChange:function(e) { setInviteRole(e.target.value); }, style:Object.assign({}, inputStyle, {width:120}) },
-                                    React.createElement('option', { value:'friend' }, 'Friend (Lite)'),
-                                    React.createElement('option', { value:'member' }, 'Member (Full)')
-                                ),
-                                React.createElement('button', { disabled:inviteLoading || !inviteEmail, onClick:function() {
-                                    setInviteLoading(true);
-                                    API.post('/invites', { email:inviteEmail, role:inviteRole }).then(function(r) {
-                                        showToast('success', 'Invite sent to ' + inviteEmail);
-                                        setInviteEmail('');
-                                        fetchInvites();
-                                        if (r.invite_link) {
-                                            if (navigator.clipboard) { navigator.clipboard.writeText(r.invite_link); }
-                                            showToast('success', 'Invite link copied to clipboard');
-                                        }
-                                    }).catch(function(e) {
-                                        showToast('error', 'Failed to send invite: ' + (e.message || 'Unknown'));
-                                    }).finally(function() { setInviteLoading(false); });
-                                }, style:Object.assign({}, btnRed, {opacity:(inviteLoading||!inviteEmail)?0.5:1,whiteSpace:'nowrap'}) }, inviteLoading ? 'Sending...' : 'Send Invite')
-                            )
-                        ),
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+      <button class="btn btn-secondary" onclick="closeModal('addConnectionModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitConnection()">Add Connection</button>
+    </div>
+  </div>
+</div>
 
-                        invites.length > 0 ? React.createElement('div', { style:Object.assign({}, cardStyle, {marginBottom:24}) },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:12} }, 'Pending Invites (' + invites.length + ')'),
-                            invites.map(function(inv) {
-                                return React.createElement('div', { key:inv.id, style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid #1a1a1a'} },
-                                    React.createElement('div', null,
-                                        React.createElement('div', { style:{fontSize:13,fontWeight:500} }, inv.email),
-                                        React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:2} }, 'Role: ' + inv.role + ' | Expires: ' + new Date(inv.expires_at).toLocaleDateString())
-                                    ),
-                                    React.createElement('div', { style:{display:'flex',gap:6,alignItems:'center'} },
-                                        React.createElement('button', { onClick:function() {
-                                            var link = inv.invite_link || (window.location.origin + '/accept-invite/' + inv.token);
-                                            if (navigator.clipboard) { navigator.clipboard.writeText(link); setCopiedInviteId(inv.id); setTimeout(function() { setCopiedInviteId(null); }, 2000); }
-                                        }, style:Object.assign({}, btnDark, {fontSize:11,padding:'5px 10px'}) }, copiedInviteId===inv.id ? 'Copied!' : 'Copy Link'),
-                                        React.createElement('button', { onClick:function() {
-                                            if (!confirm('Revoke invite for ' + inv.email + '?')) return;
-                                            API.del('/invites/' + inv.id).then(function() { showToast('success', 'Invite revoked'); fetchInvites(); }).catch(function(e) { showToast('error', 'Failed: ' + (e.message || 'Unknown')); });
-                                        }, style:Object.assign({}, btnBase, {background:'rgba(220,38,38,0.08)',border:'1px solid rgba(220,38,38,0.2)',color:'#FCA5A5',fontSize:11,padding:'5px 10px'}) }, 'Revoke')
-                                    )
-                                );
-                            })
-                        ) : null,
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
 
-                        React.createElement('div', { style:{fontSize:13,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12} }, 'Members (' + team.length + ')'),
-                        team.length === 0 ? React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{textAlign:'center',padding:'40px 0',color:'#666',fontSize:14} }, 'No team members yet.')
-                        ) : React.createElement('div', null,
-                            team.map(function(m) {
-                                var isCurrentUser = m.user_id === (function() { try { return JSON.parse(atob(localStorage.getItem('sentinel_token').split('.')[1])).user_id; } catch(e) { return ''; } })();
-                                return React.createElement('div', { key:m.user_id || m.id, style:Object.assign({}, cardStyle, {display:'flex',justifyContent:'space-between',alignItems:'center'}) },
-                                    React.createElement('div', { style:{display:'flex',alignItems:'center',gap:12} },
-                                        React.createElement('div', { style:{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#DC2626,#7F1D1D)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700,color:'#fff'} }, (m.username || m.email || '?')[0].toUpperCase()),
-                                        React.createElement('div', null,
-                                            React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6} },
-                                                React.createElement('span', { style:{fontSize:14,fontWeight:600} }, m.username),
-                                                isCurrentUser ? React.createElement('span', { style:{fontSize:10,color:'#DC2626',background:'rgba(220,38,38,0.1)',padding:'2px 6px',borderRadius:4} }, 'You') : null,
-                                                m.role === 'admin' ? React.createElement('span', { style:{fontSize:10,color:'#EAB308',background:'rgba(234,179,8,0.1)',padding:'2px 6px',borderRadius:4} }, 'Admin') : null
-                                            ),
-                                            React.createElement('div', { style:{fontSize:12,color:'#666',marginTop:2} }, m.email),
-                                            React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:2} }, 'Joined: ' + new Date(m.created_at || Date.now()).toLocaleDateString())
-                                        )
-                                    ),
-                                    !isCurrentUser ? React.createElement('button', { onClick:function() {
-                                        if (!confirm('Remove ' + m.username + ' from your organization?')) return;
-                                        API.del('/team/' + (m.user_id || m.id)).then(function() { showToast('success', m.username + ' removed'); fetchTeam(); }).catch(function(e) { showToast('error', 'Failed: ' + (e.message || 'Unknown')); });
-                                    }, style:Object.assign({}, btnBase, {background:'rgba(220,38,38,0.08)',border:'1px solid rgba(220,38,38,0.2)',color:'#FCA5A5',fontSize:11,padding:'5px 10px'}) }, 'Remove') : React.createElement('span', { style:{fontSize:11,color:'#555'} }, 'Current user')
-                                );
-                            })
-                        )
-                    ) : tab === 'reports' ? React.createElement('div', null,
-                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Scheduled Reports'),
-                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Automatically generate and email PDF threat reports on a schedule.'),
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16} },
-                                React.createElement('div', { style:{display:'flex',alignItems:'center',gap:10} },
-                                    React.createElement('div', { style:{width:36,height:36,borderRadius:8,background:schedule.enabled?'rgba(34,197,94,0.12)':'rgba(102,102,102,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16} }, schedule.enabled ? '\\u2713' : '\\u25CB'),
-                                    React.createElement('div', null,
-                                        React.createElement('div', { style:{fontSize:14,fontWeight:600} }, 'Report Schedule'),
-                                        React.createElement('div', { style:{fontSize:11,color:'#666',marginTop:2} }, schedule.last_sent ? 'Last sent: ' + new Date(schedule.last_sent).toLocaleDateString() : 'Never sent yet')
-                                    )
-                                ),
-                                React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
-                                    React.createElement('span', { style:{fontSize:12,color:'#888'} }, schedule.enabled ? 'Enabled' : 'Disabled'),
-                                    React.createElement('button', { onClick:function() {
-                                        var next = Object.assign({}, schedule, {enabled:!schedule.enabled});
-                                        setSchedLoading(true);
-                                        API.post('/report-schedule', next).then(function() { setSchedule(next); showToast('success', next.enabled ? 'Schedule enabled' : 'Schedule disabled'); }).catch(function(e) { showToast('error', e.message || 'Failed'); }).finally(function() { setSchedLoading(false); });
-                                    }, style:{width:44,height:24,borderRadius:12,background:schedule.enabled?'linear-gradient(135deg,#22C55E,#166534)':'#333',border:'none',cursor:'pointer',position:'relative',transition:'all 0.2s',opacity:schedLoading?0.6:1} },
-                                        React.createElement('div', { style:{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:schedule.enabled?23:3,transition:'all 0.2s'} })
-                                    )
-                                )
-                            ),
-                            React.createElement('div', { style:{marginBottom:16} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Frequency'),
-                                React.createElement('select', { value:schedule.frequency, onChange:function(e) { setSchedule(Object.assign({}, schedule, {frequency:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
-                                    React.createElement('option', { value:'weekly' }, 'Weekly'),
-                                    React.createElement('option', { value:'monthly' }, 'Monthly')
-                                )
-                            ),
-                            React.createElement('div', { style:{marginBottom:16} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Recipient Emails (comma separated)'),
-                                React.createElement('input', { value:(schedule.recipients||[]).join(', '), onChange:function(e) { setSchedule(Object.assign({}, schedule, {recipients:e.target.value.split(',').map(function(s){return s.trim();}).filter(Boolean)})); }, placeholder:'admin@company.com, ceo@company.com', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
-                            ),
-                            React.createElement('div', { style:{display:'flex',gap:8} },
-                                React.createElement('button', { onClick:function() {
-                                    setSchedLoading(true);
-                                    API.post('/report-schedule', schedule).then(function() { showToast('success', 'Schedule saved'); }).catch(function(e) { showToast('error', e.message || 'Failed'); }).finally(function() { setSchedLoading(false); });
-                                }, disabled:schedLoading, style:Object.assign({}, btnRed, {opacity:schedLoading?0.6:1}) }, schedLoading ? 'Saving...' : 'Save Schedule'),
-                                React.createElement('button', { onClick:function() {
-                                    window.open('/api/v1/report-schedule/test', '_blank');
-                                    showToast('success', 'Generating report PDF...');
-                                }, style:btnDark }, 'Download Test Report')
-                            )
-                        )
-                    ) : tab === 'branding' ? React.createElement('div', null,
-                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'White-Label Branding'),
-                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Customize the look and feel of your SENTINEL deployment with your own brand.'),
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{marginBottom:16} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Organization Display Name'),
-                                React.createElement('input', { value:branding.org_display_name||'', onChange:function(e) { setBranding(Object.assign({}, branding, {org_display_name:e.target.value})); }, placeholder:'Your Company Name', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
-                            ),
-                            React.createElement('div', { style:{marginBottom:16} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Logo URL'),
-                                React.createElement('input', { value:branding.logo_url||'', onChange:function(e) { setBranding(Object.assign({}, branding, {logo_url:e.target.value})); }, placeholder:'https://your-cdn.com/logo.png', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} }),
-                                React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:4} }, 'Paste a URL to your logo image (PNG, SVG, or JPG recommended)')
-                            ),
-                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16} },
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Primary Color'),
-                                    React.createElement('div', { style:{display:'flex',gap:8,alignItems:'center'} },
-                                        React.createElement('input', { type:'color', value:branding.primary_color||'#DC2626', onChange:function(e) { setBranding(Object.assign({}, branding, {primary_color:e.target.value})); }, style:{width:40,height:36,border:'1px solid #222',borderRadius:6,cursor:'pointer',padding:2,background:'#0a0a0a'} }),
-                                        React.createElement('input', { value:branding.primary_color||'#DC2626', onChange:function(e) { setBranding(Object.assign({}, branding, {primary_color:e.target.value})); }, style:{flex:1,padding:'8px 12px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:12,fontFamily:'JetBrains Mono'} })
-                                    )
-                                ),
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Secondary Color'),
-                                    React.createElement('div', { style:{display:'flex',gap:8,alignItems:'center'} },
-                                        React.createElement('input', { type:'color', value:branding.secondary_color||'#7F1D1D', onChange:function(e) { setBranding(Object.assign({}, branding, {secondary_color:e.target.value})); }, style:{width:40,height:36,border:'1px solid #222',borderRadius:6,cursor:'pointer',padding:2,background:'#0a0a0a'} }),
-                                        React.createElement('input', { value:branding.secondary_color||'#7F1D1D', onChange:function(e) { setBranding(Object.assign({}, branding, {secondary_color:e.target.value})); }, style:{flex:1,padding:'8px 12px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:12,fontFamily:'JetBrains Mono'} })
-                                    )
-                                )
-                            ),
-                            React.createElement('div', { style:{marginBottom:16} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Custom CSS (Advanced)'),
-                                React.createElement('textarea', { value:branding.custom_css||'', onChange:function(e) { setBranding(Object.assign({}, branding, {custom_css:e.target.value})); }, placeholder:'.sentinel-logo { filter: brightness(1.5); }', rows:4, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:12,fontFamily:'JetBrains Mono',resize:'vertical'} })
-                            ),
-                            React.createElement('div', { style:{display:'flex',gap:8} },
-                                React.createElement('button', { onClick:function() {
-                                    API.post('/branding', branding).then(function() { showToast('success', 'Branding saved'); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                                }, style:btnRed }, 'Save Branding'),
-                                React.createElement('button', { onClick:function() { setBranding({logo_url:'', primary_color:'#DC2626', secondary_color:'#7F1D1D', org_display_name:'', custom_css:''}); }, style:btnDark }, 'Reset to Default')
-                            )
-                        ),
-                        branding.logo_url ? React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:12} }, 'Preview'),
-                            React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:12,padding:20} },
-                                React.createElement('div', { style:{display:'flex',alignItems:'center',gap:12,marginBottom:16} },
-                                    React.createElement('img', { src:branding.logo_url, alt:'Logo', style:{height:32,objectFit:'contain'}, onError:function(e) { e.target.style.display='none'; } }),
-                                    React.createElement('span', { style:{fontSize:16,fontWeight:800,color:branding.primary_color||'#DC2626'} }, branding.org_display_name || 'Your Company'),
-                                    React.createElement('span', { style:{fontSize:11,color:'#666',background:'#161616',padding:'2px 8px',borderRadius:4} }, 'SENTINEL Powered')
-                                ),
-                                React.createElement('div', { style:{display:'flex',gap:8} },
-                                    React.createElement('div', { style:{background:branding.primary_color||'#DC2626',padding:'6px 14px',borderRadius:6,fontSize:12,fontWeight:600,color:'#fff'} }, 'Primary'),
-                                    React.createElement('div', { style:{background:branding.secondary_color||'#7F1D1D',padding:'6px 14px',borderRadius:6,fontSize:12,fontWeight:600,color:'#fff'} }, 'Secondary')
-                                )
-                            )
-                        ) : null
-                    ) : tab === 'rules' ? React.createElement('div', null,
-                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Custom Detection Rules'),
-                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Define your own patterns to flag, whitelist, or block specific content in scanned emails.'),
+<script>
+/* ============================
+   API HELPERS
+   ============================ */
+function apiGet(path) {
+  return fetch('/api/v1' + path, {headers: {'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json'}})
+    .then(function(r) { if(r.status===401){logout();throw new Error('expired');} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||'Failed')}); return r.json(); });
+}
+function apiPost(path, body) {
+  return fetch('/api/v1' + path, {method:'POST', headers:{'Authorization':'Bearer '+getToken(),'Content-Type':'application/json'}, body:JSON.stringify(body)})
+    .then(function(r) { if(r.status===401){logout();throw new Error('expired');} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||'Failed')}); return r.json(); });
+}
+function apiDel(path) {
+  return fetch('/api/v1' + path, {method:'DELETE', headers:{'Authorization':'Bearer '+getToken()}})
+    .then(function(r) { if(r.status===401){logout();throw new Error('expired')} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||'Failed')}); return r.json(); });
+}
+function apiPatch(path, body) {
+  return fetch('/api/v1' + path, {method:'PATCH', headers:{'Authorization':'Bearer '+getToken(),'Content-Type':'application/json'}, body:JSON.stringify(body)})
+    .then(function(r) { if(r.status===401){logout();throw new Error('expired')} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||'Failed')}); return r.json(); });
+}
+function getToken() { return localStorage.getItem('sentinel_token'); }
+function logout() { localStorage.removeItem('sentinel_token'); localStorage.removeItem('sentinel_user'); window.location.href='/login'; }
 
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Create New Rule'),
-                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12} },
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Rule Name'),
-                                    React.createElement('input', { value:newRule.name, onChange:function(e) { setNewRule(Object.assign({}, newRule, {name:e.target.value})); }, placeholder:'e.g. Block competitor domains', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
-                                ),
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Pattern'),
-                                    React.createElement('input', { value:newRule.pattern, onChange:function(e) { setNewRule(Object.assign({}, newRule, {pattern:e.target.value})); }, placeholder:'e.g. evil-domain\\.com or urgent wire transfer', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'JetBrains Mono'} })
-                                )
-                            ),
-                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12} },
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Type'),
-                                    React.createElement('select', { value:newRule.rule_type, onChange:function(e) { setNewRule(Object.assign({}, newRule, {rule_type:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
-                                        React.createElement('option', { value:'keyword' }, 'Keyword (substring match)'),
-                                        React.createElement('option', { value:'regex' }, 'Regex (pattern match)'),
-                                        React.createElement('option', { value:'domain' }, 'Domain (partial match)')
-                                    )
-                                ),
-                                React.createElement('div', null,
-                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Action'),
-                                    React.createElement('select', { value:newRule.action, onChange:function(e) { setNewRule(Object.assign({}, newRule, {action:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
-                                        React.createElement('option', { value:'flag' }, 'Flag (mark as suspicious)'),
-                                        React.createElement('option', { value:'whitelist' }, 'Whitelist (mark as safe)'),
-                                        React.createElement('option', { value:'block' }, 'Block (mark as malicious)')
-                                    )
-                                )
-                            ),
-                            React.createElement('div', { style:{marginBottom:16} },
-                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Description (optional)'),
-                                React.createElement('input', { value:newRule.description, onChange:function(e) { setNewRule(Object.assign({}, newRule, {description:e.target.value})); }, placeholder:'Why this rule matters...', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
-                            ),
-                            React.createElement('button', { onClick:function() {
-                                if (!newRule.name || !newRule.pattern) { showToast('error', 'Name and pattern are required'); return; }
-                                API.post('/rules', newRule).then(function() { showToast('success', 'Rule created'); setNewRule({name:'', pattern:'', rule_type:'keyword', action:'flag', description:''}); fetchRules(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                            }, style:btnRed }, '+ Create Rule')
-                        ),
+/* ============================
+   TOAST
+   ============================ */
+function toast(msg, type) {
+  var c = document.getElementById('toastContainer');
+  var el = document.createElement('div');
+  el.className = 'toast toast-' + (type || 'success');
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(function() { if(el.parentNode) el.parentNode.removeChild(el); }, 3200);
+}
 
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:12} }, 'Test Rules'),
-                            React.createElement('div', { style:{display:'flex',gap:8,marginBottom:12} },
-                                React.createElement('input', { value:ruleTestText, onChange:function(e) { setRuleTestText(e.target.value); }, placeholder:'Paste email text to test against your rules...', style:{flex:1,padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} }),
-                                React.createElement('button', { onClick:function() {
-                                    API.post('/rules/check', {text:ruleTestText}).then(function(r) { setRuleMatches(r.matches || []); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                                }, style:btnDark }, 'Test')
-                            ),
-                            ruleMatches !== null ? React.createElement('div', null,
-                                ruleMatches.length === 0 ? React.createElement('div', { style:{fontSize:13,color:'#888',padding:'12px',background:'#0a0a0a',borderRadius:8,textAlign:'center'} }, 'No rules matched this text.') :
-                                ruleMatches.map(function(m, i) {
-                                    var actionColors = {flag:'#EAB308',whitelist:'#22C55E',block:'#EF4444'};
-                                    return React.createElement('div', { key:i, style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,marginBottom:6} },
-                                        React.createElement('div', null,
-                                            React.createElement('span', { style:{fontSize:13,fontWeight:600} }, m.name),
-                                            React.createElement('span', { style:{fontSize:11,color:'#666',marginLeft:8} }, 'Pattern: ' + m.pattern)
-                                        ),
-                                        React.createElement('span', { style:{fontSize:11,fontWeight:700,color:actionColors[m.action]||'#888',textTransform:'uppercase'} }, m.action)
-                                    );
-                                })
-                            ) : null
-                        ),
+/* ============================
+   MODAL
+   ============================ */
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-                        React.createElement('div', { style:cardStyle },
-                            React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16} },
-                                React.createElement('div', { style:{fontSize:14,fontWeight:600} }, 'Active Rules (' + rules.length + ')')
-                            ),
-                            rules.length === 0 ? React.createElement('div', { style:{textAlign:'center',padding:'40px 0',color:'#666',fontSize:14} }, 'No custom rules yet. Create one above to get started.') :
-                            rules.map(function(r) {
-                                var actionColors = {flag:'#EAB308',whitelist:'#22C55E',block:'#EF4444'};
-                                var actionBgs = {flag:'rgba(234,179,8,0.12)',whitelist:'rgba(34,197,94,0.12)',block:'rgba(220,38,38,0.12)'};
-                                return React.createElement('div', { key:r.id, style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 16px',background:'#0a0a0a',border:'1px solid #222',borderRadius:10,marginBottom:8,opacity:r.enabled?1:0.5} },
-                                    React.createElement('div', { style:{flex:1} },
-                                        React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8,marginBottom:4} },
-                                            React.createElement('span', { style:{fontSize:14,fontWeight:600} }, r.name),
-                                            React.createElement('span', { style:{fontSize:10,fontWeight:700,color:actionColors[r.action],background:actionBgs[r.action],padding:'2px 8px',borderRadius:4,textTransform:'uppercase'} }, r.action),
-                                            React.createElement('span', { style:{fontSize:10,color:'#888',background:'#161616',padding:'2px 6px',borderRadius:4} }, r.rule_type)
-                                        ),
-                                        React.createElement('div', { style:{fontSize:12,color:'#888',fontFamily:'JetBrains Mono',marginBottom:2} }, r.pattern),
-                                        r.description ? React.createElement('div', { style:{fontSize:11,color:'#555'} }, r.description) : null
-                                    ),
-                                    React.createElement('div', { style:{display:'flex',gap:6,alignItems:'center'} },
-                                        React.createElement('button', { onClick:function() {
-                                            API.patch('/rules/' + r.id + '/toggle', {enabled:!r.enabled}).then(function() { fetchRules(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                                        }, style:{width:36,height:20,borderRadius:10,background:r.enabled?'linear-gradient(135deg,#22C55E,#166534)':'#333',border:'none',cursor:'pointer',position:'relative',transition:'all 0.2s'} },
-                                            React.createElement('div', { style:{width:16,height:16,borderRadius:'50%',background:'#fff',position:'absolute',top:2,left:r.enabled?18:2,transition:'all 0.2s'} })
-                                        ),
-                                        React.createElement('button', { onClick:function() {
-                                            if (!confirm('Delete rule "' + r.name + '"?')) return;
-                                            API.del('/rules/' + r.id).then(function() { showToast('success', 'Rule deleted'); fetchRules(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
-                                        }, style:{background:'rgba(220,38,38,0.08)',border:'1px solid rgba(220,38,38,0.2)',color:'#FCA5A5',padding:'4px 10px',borderRadius:6,fontSize:11,cursor:'pointer',fontFamily:'Inter'} }, 'Delete')
-                                    )
-                                );
-                            })
-                        )
-                    ) : React.createElement('div', null,
-                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Team Members'),
-                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Manage who has access to your organization.'),
+/* ============================
+   TABS
+   ============================ */
+var loadedTabs = {};
+var currentTab = 'connections';
 
-                        React.createElement('div', { style:Object.assign({}, cardStyle, {marginBottom:24}) },
-                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:12} }, 'Invite Member'),
-                            React.createElement('div', { style:{display:'flex',gap:8,flexWrap:'wrap'} },
-                    React.createElement('div', { className:'anim-modal s-modal', onClick:function(e) { e.stopPropagation(); }, style:{background:'#161616',border:'1px solid #1a1a1a',borderRadius:16,width:'100%',maxWidth:480,padding:28} },
-                        React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20} },
-                            React.createElement('div', { style:{fontSize:18,fontWeight:700} }, 'Add Email Connection'),
-                            React.createElement('button', { onClick:function() { setShowAdd(false); }, style:{background:'#111',border:'1px solid #282828',borderRadius:8,width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#666',fontSize:13} }, '\\u2715')
-                        ),
-                        React.createElement(AddConnectionForm, { onDone:function() { setShowAdd(false); showToast('success', 'Connection added'); fetchConns(); }, showToast:showToast })
-                    )
-                ) : null,
-                toast ? React.createElement('div', { style:{position:'fixed',top:80,right:20,zIndex:200,animation:'toastIn 0.3s ease-out',background:toast.type==='success'?'#0d2818':'#2d0a0a',border:'1px solid '+(toast.type==='success'?'#166534':'#7f1d1d'),borderRadius:10,padding:'12px 16px',display:'flex',alignItems:'center',gap:10,fontSize:13,color:toast.type==='success'?'#86EFAC':'#FCA5A5',boxShadow:'0 8px 30px rgba(0,0,0,0.4)'} },
-                    React.createElement('span', null, toast.type==='success'?'\\u2713':'\\u2715'),
-                    React.createElement('span', null, toast.msg)
-                ) : null
-            );
-        }
+document.getElementById('tabGrid').addEventListener('click', function(e) {
+  var btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  var tab = btn.getAttribute('data-tab');
+  switchTab(tab);
+});
 
-        function AddConnectionForm(props) {
-            var _s = useState({label:'My Email',provider:'gmail',imap_host:'imap.gmail.com',imap_port:993,imap_username:'',imap_password:'',imap_folder:'INBOX',scan_interval:30});
-            var form = _s[0], setForm = _s[1];
-            var _submitting = useState(false);
-            var submitting = _submitting[0], setSubmitting = _submitting[1];
-            var _showGuide = useState(false);
-            var showGuide = _showGuide[0], setShowGuide = _showGuide[1];
-            var inputStyle = { width:'100%', padding:'10px 14px', background:'#0a0a0a', border:'1px solid #222', borderRadius:8, color:'#f5f5f5', fontSize:13, fontFamily:'Inter', outline:'none' };
+function switchTab(tab) {
+  if (tab === currentTab) return;
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelector('[data-tab="' + tab + '"]').classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+  currentTab = tab;
+  document.querySelector('.header-nav').classList.remove('open');
+  if (!loadedTabs[tab]) {
+    loadedTabs[tab] = true;
+    loadTab(tab);
+  }
+}
 
-            var providers = { gmail:{host:'imap.gmail.com',port:993}, outlook:{host:'outlook.office365.com',port:993}, yahoo:{host:'imap.mail.yahoo.com',port:993}, custom:{host:'',port:993} };
+function loadTab(tab) {
+  switch(tab) {
+    case 'connections': loadConnections(); break;
+    case 'scans': loadScans(); break;
+    case 'team': loadTeam(); break;
+    case 'reports': loadReports(); break;
+    case 'branding': loadBranding(); break;
+    case 'rules': loadRules(); break;
+    case 'alerts': loadAlerts(); break;
+    case 'intel': loadIntel(); break;
+    case 'simulations': loadSimulations(); break;
+  }
+}
 
-            var handleChange = function(field, value) {
-                var next = Object.assign({}, form, {[field]:value});
-                if (field === 'provider' && providers[value]) {
-                    next.imap_host = providers[value].host;
-                    next.imap_port = providers[value].port;
-                }
-                setForm(next);
-            };
+function esc(s) {
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
 
-            var handleSubmit = function() {
-                if (!form.imap_username || !form.imap_password) { props.showToast('error', 'Fill in email and password'); return; }
-                setSubmitting(true);
-                API.post('/connections', form).then(function() { props.onDone(); }).catch(function(e) { props.showToast('error', 'Failed to add: ' + (e.message || 'Unknown error')); setSubmitting(false); });
-            };
+function fmtDate(s) {
+  if (!s) return '—';
+  try { return new Date(s).toLocaleString(); } catch(e) { return s; }
+}
 
-            var labelStyle = {fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6};
-            var stepNum = {display:'inline-flex',alignItems:'center',justifyContent:'center',width:22,height:22,borderRadius:'50%',background:'linear-gradient(135deg,#DC2626,#991B1B)',color:'#fff',fontSize:11,fontWeight:700,flexShrink:0,marginRight:8};
-            var guideStep = {display:'flex',alignItems:'flex-start',marginBottom:14};
+/* ============================
+   1. EMAIL CONNECTIONS
+   ============================ */
+function loadConnections() {
+  apiGet('/connections').then(function(data) {
+    var list = data.connections || [];
+    var el = document.getElementById('connectionsList');
+    if (!list.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📧</div><p>No connections yet. Add one to get started.</p></div>'; return; }
+    el.innerHTML = list.map(function(c) {
+      return '<div class="connection-item">' +
+        '<div class="status-dot ' + (c.is_active !== false ? 'active' : 'inactive') + '"></div>' +
+        '<div class="connection-info">' +
+          '<h4>' + esc(c.label || 'Connection') + '</h4>' +
+          '<p>' + esc(c.imap_username || '') + ' @ ' + esc(c.imap_host || '') + '</p>' +
+          '<p style="margin-top:2px">Last scan: ' + fmtDate(c.last_scan) + '</p>' +
+        '</div>' +
+        '<div class="connection-actions">' +
+          '<button class="btn btn-sm btn-secondary" onclick="scanNow(\'' + c.id + '\', this)">Scan Now</button>' +
+          '<button class="btn btn-sm btn-danger" onclick="removeConnection(\'' + c.id + '\', this)">Remove</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }).catch(function(e) {
+    document.getElementById('connectionsList').innerHTML = '<div class="empty-state"><p>Failed to load connections.</p></div>';
+  });
+}
 
-            var gmailGuide = React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:10,padding:16,marginBottom:14} },
-                React.createElement('div', { style:{fontSize:13,fontWeight:700,color:'#EF4444',marginBottom:12} }, 'How to Create a Gmail App Password'),
-                React.createElement('div', { style:{fontSize:12,color:'#888',marginBottom:12} }, 'Google requires an "App Password" instead of your regular password for IMAP access. This is a one-time setup.'),
-                React.createElement('div', { style:guideStep },
-                    React.createElement('span', { style:stepNum }, '1'),
-                    React.createElement('div', null,
-                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Enable 2-Step Verification'),
-                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Go to ', React.createElement('a', { href:'https://myaccount.google.com/security', target:'_blank', style:{color:'#EF4444'} }, 'myaccount.google.com/security'), ' and turn on 2-Step Verification if you have not already. This is required before you can create an app password.')
-                    )
-                ),
-                React.createElement('div', { style:guideStep },
-                    React.createElement('span', { style:stepNum }, '2'),
-                    React.createElement('div', null,
-                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Open App Passwords Page'),
-                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Go to ', React.createElement('a', { href:'https://myaccount.google.com/apppasswords', target:'_blank', style:{color:'#EF4444'} }, 'myaccount.google.com/apppasswords'), ' directly. You may be asked to sign in again.')
-                    )
-                ),
-                React.createElement('div', { style:guideStep },
-                    React.createElement('span', { style:stepNum }, '3'),
-                    React.createElement('div', null,
-                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Generate the Password'),
-                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Under "App name", type something like "Sentinel" and click ', React.createElement('span', { style:{fontWeight:600,color:'#ccc'} }, 'Create'), '. Google will show you a 16-character password.')
-                    )
-                ),
-                React.createElement('div', { style:guideStep },
-                    React.createElement('span', { style:stepNum }, '4'),
-                    React.createElement('div', null,
-                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Copy & Paste the Password'),
-                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Copy the 16-character password (e.g. abcd efgh ijkl mnop) and paste it in the App Password field below. ', React.createElement('span', { style:{color:'#EF4444',fontWeight:600} }, 'Remove the spaces'), ' when pasting.')
-                    )
-                ),
-                React.createElement('div', { style:guideStep },
-                    React.createElement('span', { style:stepNum }, '5'),
-                    React.createElement('div', null,
-                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'All Set!'),
-                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Click "Add Connection" below. Sentinel will verify your credentials by logging into your inbox via IMAP.')
-                    )
-                )
-            );
+function scanNow(id, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+  apiPost('/scan/' + id, {}).then(function() {
+    toast('Scan started successfully');
+    btn.textContent = 'Scan Now';
+    btn.disabled = false;
+  }).catch(function(e) {
+    toast(e.message, 'error');
+    btn.textContent = 'Scan Now';
+    btn.disabled = false;
+  });
+}
 
-            var outlookGuide = React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:10,padding:16,marginBottom:14} },
-                React.createElement('div', { style:{fontSize:13,fontWeight:700,color:'#3B82F6',marginBottom:12} }, 'How to Create a Microsoft App Password'),
-                React.createElement('div', { style:guideStep },
-                    React.createElement('span', { style:stepNum }, '1'),
-                    React.createElement('div', null,
-                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Go to Microsoft Account Security'),
-                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Visit ', React.createElement('a', { href:'https://account.microsoft.com/security', target:'_blank', style:{color:'#3B82F6'} }, 'account.microsoft.com/security'), ' and sign in.')
-                    )
-                ),
-                React.createElement('div', { style:guideStep },
-                    React.createElement('span', { style:stepNum }, '2'),
-                    React.createElement('div', null,
-                        React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#ccc'} }, 'Create an App Password'),
-                        React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.5} }, 'Click "Create a new app password" under the "App passwords" section. Copy the generated password and paste it below.')
-                    )
-                )
-            );
+function removeConnection(id, btn) {
+  if (!confirm('Remove this connection?')) return;
+  btn.disabled = true;
+  apiDel('/connections/' + id).then(function() {
+    toast('Connection removed');
+    loadConnections();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+  });
+}
 
-            return React.createElement('div', null,
-                React.createElement('div', { style:{marginBottom:14} },
-                    React.createElement('label', { style:labelStyle }, 'Label'),
-                    React.createElement('input', { value:form.label, onChange:function(e) { handleChange('label', e.target.value); }, style:inputStyle })
-                ),
-                React.createElement('div', { style:{marginBottom:14} },
-                    React.createElement('label', { style:labelStyle }, 'Provider'),
-                    React.createElement('select', { value:form.provider, onChange:function(e) { handleChange('provider', e.target.value); }, style:Object.assign({}, inputStyle, {cursor:'pointer'}) },
-                        React.createElement('option', { value:'gmail' }, 'Gmail'),
-                        React.createElement('option', { value:'outlook' }, 'Outlook / Microsoft 365'),
-                        React.createElement('option', { value:'yahoo' }, 'Yahoo Mail'),
-                        React.createElement('option', { value:'custom' }, 'Custom IMAP')
-                    )
-                ),
-                React.createElement('div', { style:{marginBottom:14} },
-                    React.createElement('label', { style:labelStyle }, 'IMAP Host'),
-                    React.createElement('input', { value:form.imap_host, onChange:function(e) { handleChange('imap_host', e.target.value); }, style:inputStyle })
-                ),
-                React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14} },
-                    React.createElement('div', null,
-                        React.createElement('label', { style:labelStyle }, 'Port'),
-                        React.createElement('input', { type:'number', value:form.imap_port, onChange:function(e) { handleChange('imap_port', parseInt(e.target.value)||993); }, style:inputStyle })
-                    ),
-                    React.createElement('div', null,
-                        React.createElement('label', { style:labelStyle }, 'Folder'),
-                        React.createElement('input', { value:form.imap_folder, onChange:function(e) { handleChange('imap_folder', e.target.value); }, style:inputStyle })
-                    )
-                ),
-                React.createElement('div', { style:{marginBottom:14} },
-                    React.createElement('label', { style:labelStyle }, 'Email Address'),
-                    React.createElement('input', { value:form.imap_username, onChange:function(e) { handleChange('imap_username', e.target.value); }, placeholder:'you@gmail.com', style:inputStyle })
-                ),
-                React.createElement('div', { style:{marginBottom:14} },
-                    React.createElement('label', { style:labelStyle }, 'App Password'),
-                    React.createElement('input', { type:'password', value:form.imap_password, onChange:function(e) { handleChange('imap_password', e.target.value); }, placeholder:'16-character app password', style:inputStyle }),
-                    React.createElement('button', { onClick:function() { setShowGuide(!showGuide); }, style:{background:'none',border:'none',color:'#EF4444',fontSize:11,fontWeight:600,cursor:'pointer',padding:'4px 0',marginTop:4,fontFamily:'Inter'} }, showGuide ? '\u25B2 Hide instructions' : '\u25BC How to create an app password')
-                ),
-                form.provider === 'gmail' && showGuide ? gmailGuide : null,
-                form.provider === 'outlook' && showGuide ? outlookGuide : null,
-                form.provider !== 'gmail' && form.provider !== 'outlook' && showGuide ? React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:10,padding:16,marginBottom:14} },
-                    React.createElement('div', { style:{fontSize:13,fontWeight:700,color:'#EAB308',marginBottom:8} }, 'App Password'),
-                    React.createElement('div', { style:{fontSize:11,color:'#888',lineHeight:1.5} }, 'Contact your email provider for instructions on creating an app-specific password for IMAP access.')
-                ) : null,
-                React.createElement('div', { style:{marginBottom:20} },
-                    React.createElement('label', { style:labelStyle }, 'Scan Interval (minutes)'),
-                    React.createElement('input', { type:'number', value:form.scan_interval, onChange:function(e) { handleChange('scan_interval', parseInt(e.target.value)||30); }, min:5, max:1440, style:inputStyle })
-                ),
-                React.createElement('div', { style:{display:'flex',gap:10,justifyContent:'flex-end'} },
-                    React.createElement('button', { onClick:props.onDone, style:{padding:'8px 16px',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',border:'1px solid #282828',background:'#161616',color:'#a0a0a0',fontFamily:'Inter'} }, 'Cancel'),
-                    React.createElement('button', { onClick:handleSubmit, disabled:submitting, style:{padding:'8px 16px',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',border:'none',background:'linear-gradient(135deg,#DC2626,#991B1B)',color:'#fff',fontFamily:'Inter',opacity:submitting?0.7:1} }, submitting ? 'Adding...' : 'Add Connection')
-                )
-            );
-        }
+function onProviderChange() {
+  var p = document.getElementById('connProvider').value;
+  var host = document.getElementById('connHost');
+  var port = document.getElementById('connPort');
+  if (p === 'gmail') { host.value = 'imap.gmail.com'; port.value = '993'; }
+  else if (p === 'outlook') { host.value = 'outlook.office365.com'; port.value = '993'; }
+  else if (p === 'yahoo') { host.value = 'imap.mail.yahoo.com'; port.value = '993'; }
+  else { host.value = ''; port.value = '993'; }
+}
 
-        var root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(App));
-    </script>
+function submitConnection() {
+  var data = {
+    label: document.getElementById('connLabel').value,
+    provider: document.getElementById('connProvider').value,
+    imap_host: document.getElementById('connHost').value,
+    imap_port: parseInt(document.getElementById('connPort').value) || 993,
+    imap_username: document.getElementById('connEmail').value,
+    imap_password: document.getElementById('connPassword').value,
+    folder: document.getElementById('connFolder').value || 'INBOX',
+    scan_interval: parseInt(document.getElementById('connInterval').value) || 60
+  };
+  if (!data.label || !data.imap_host || !data.imap_username || !data.imap_password) {
+    toast('Please fill in all required fields', 'error'); return;
+  }
+  apiPost('/connections', data).then(function() {
+    toast('Connection added successfully');
+    closeModal('addConnectionModal');
+    document.getElementById('connLabel').value = '';
+    document.getElementById('connEmail').value = '';
+    document.getElementById('connPassword').value = '';
+    loadConnections();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+function toggleGuide(id, btn) {
+  var el = document.getElementById(id);
+  el.classList.toggle('open');
+  btn.innerHTML = (el.classList.contains('open') ? '&#9652; ' : '&#9662; ') + btn.textContent.replace(/^[▲▼]\\s*/, '');
+}
+
+/* ============================
+   2. SCAN HISTORY
+   ============================ */
+function loadScans() {
+  apiGet('/scans').then(function(data) {
+    var jobs = data.jobs || [];
+    var el = document.getElementById('scansList');
+    if (!jobs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No scans yet.</p></div>'; return; }
+    el.innerHTML = jobs.map(function(j) {
+      var stClass = 'badge-neutral';
+      if (j.status === 'completed' || j.status === 'success') stClass = 'badge-success';
+      else if (j.status === 'failed' || j.status === 'error') stClass = 'badge-error';
+      else if (j.status === 'running' || j.status === 'in_progress') stClass = 'badge-warning';
+      return '<div class="item-row">' +
+        '<div class="item-main">' +
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+            '<span class="badge ' + stClass + '">' + esc(j.status || 'unknown') + '</span>' +
+            '<span style="font-size:.82rem;color:var(--text-dim)">' + fmtDate(j.created_at || j.started_at) + '</span>' +
+          '</div>' +
+          '<div class="item-meta">' +
+            '<span>Emails found: <strong>' + (j.emails_found || 0) + '</strong></span>' +
+            '<span>Analyzed: <strong>' + (j.emails_analyzed || 0) + '</strong></span>' +
+          '</div>' +
+          (j.error ? '<div style="margin-top:6px;font-size:.78rem;color:var(--red);font-family:var(--mono)">' + esc(j.error) + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }).catch(function() {
+    document.getElementById('scansList').innerHTML = '<div class="empty-state"><p>Failed to load scan history.</p></div>';
+  });
+}
+
+/* ============================
+   3. TEAM
+   ============================ */
+function loadTeam() {
+  loadMembers();
+  loadInvites();
+}
+
+function loadMembers() {
+  apiGet('/team').then(function(data) {
+    var members = data.members || [];
+    var el = document.getElementById('membersList');
+    if (!members.length) { el.innerHTML = '<div class="empty-state"><p>No team members.</p></div>'; return; }
+    el.innerHTML = members.map(function(m) {
+      var initial = (m.username || m.email || '?').charAt(0).toUpperCase();
+      return '<div class="item-row">' +
+        '<div class="avatar">' + initial + '</div>' +
+        '<div class="item-main">' +
+          '<div style="font-weight:600;font-size:.92rem">' + esc(m.username || 'User') + '</div>' +
+          '<div style="font-size:.78rem;color:var(--text-muted)">' + esc(m.email || '') + '</div>' +
+        '</div>' +
+        '<span class="badge badge-info">' + esc(m.role || 'member') + '</span>' +
+        '<div class="item-actions">' +
+          '<button class="btn btn-sm btn-danger" onclick="removeMember(\'' + m.id + '\', this)">Remove</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }).catch(function() {
+    document.getElementById('membersList').innerHTML = '<div class="empty-state"><p>Failed to load members.</p></div>';
+  });
+}
+
+function loadInvites() {
+  apiGet('/invites').then(function(data) {
+    var invites = data.invites || [];
+    var el = document.getElementById('invitesList');
+    if (!invites.length) { el.innerHTML = '<div class="empty-state"><p>No pending invites.</p></div>'; return; }
+    el.innerHTML = invites.map(function(inv) {
+      return '<div class="item-row">' +
+        '<div class="item-main">' +
+          '<div style="font-weight:500;font-size:.9rem">' + esc(inv.email) + '</div>' +
+          '<div class="item-meta">' +
+            '<span>Role: ' + esc(inv.role || 'member') + '</span>' +
+            '<span>Invited: ' + fmtDate(inv.created_at) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="item-actions">' +
+          (inv.invite_link ? '<button class="btn btn-sm btn-secondary" onclick="copyInviteLink(\'' + esc(inv.invite_link) + '\', this)">Copy Link</button>' : '') +
+          '<button class="btn btn-sm btn-danger" onclick="revokeInvite(\'' + inv.id + '\', this)">Revoke</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }).catch(function() {
+    document.getElementById('invitesList').innerHTML = '<div class="empty-state"><p>Failed to load invites.</p></div>';
+  });
+}
+
+function sendInvite() {
+  var email = document.getElementById('inviteEmail').value;
+  var role = document.getElementById('inviteRole').value;
+  if (!email) { toast('Enter an email address', 'error'); return; }
+  apiPost('/invites', {email: email, role: role}).then(function() {
+    toast('Invite sent!');
+    document.getElementById('inviteEmail').value = '';
+    loadInvites();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+function copyInviteLink(link, btn) {
+  navigator.clipboard.writeText(link).then(function() {
+    toast('Link copied!');
+  }).catch(function() {
+    toast('Failed to copy', 'error');
+  });
+}
+
+function revokeInvite(id, btn) {
+  if (!confirm('Revoke this invite?')) return;
+  btn.disabled = true;
+  apiDel('/invites/' + id).then(function() {
+    toast('Invite revoked');
+    loadInvites();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+  });
+}
+
+function removeMember(id, btn) {
+  if (!confirm('Remove this team member?')) return;
+  btn.disabled = true;
+  apiDel('/team/' + id).then(function() {
+    toast('Member removed');
+    loadMembers();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+  });
+}
+
+/* ============================
+   4. REPORTS
+   ============================ */
+function loadReports() {
+  apiGet('/report-schedule').then(function(data) {
+    var el = document.getElementById('reportsContent');
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<span style="font-weight:500">Enabled</span>' +
+          '<label class="toggle"><input type="checkbox" id="reportEnabled" ' + (data.enabled ? 'checked' : '') + '><span class="toggle-slider"></span></label>' +
+        '</div>' +
+        '<button class="btn btn-primary" onclick="saveReports()">Save</button>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group"><label class="form-label">Frequency</label>' +
+          '<select class="form-select" id="reportFreq">' +
+            '<option value="weekly"' + (data.frequency === 'weekly' ? ' selected' : '') + '>Weekly</option>' +
+            '<option value="monthly"' + (data.frequency === 'monthly' ? ' selected' : '') + '>Monthly</option>' +
+          '</select></div>' +
+        '<div class="form-group"><label class="form-label">Recipients (comma separated)</label>' +
+          '<input type="text" class="form-input" id="reportRecipients" value="' + esc((data.recipients || []).join(', ')) + '" placeholder="email1@example.com, email2@example.com"></div>' +
+      '</div>' +
+      '<div style="margin-top:14px">' +
+        '<button class="btn btn-secondary" onclick="downloadTestReport()">Download Test Report</button>' +
+      '</div>';
+  }).catch(function() {
+    document.getElementById('reportsContent').innerHTML = '<div class="empty-state"><p>Failed to load report settings.</p></div>';
+  });
+}
+
+function saveReports() {
+  var enabled = document.getElementById('reportEnabled').checked;
+  var frequency = document.getElementById('reportFreq').value;
+  var recipientsRaw = document.getElementById('reportRecipients').value;
+  var recipients = recipientsRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  apiPost('/report-schedule', {enabled: enabled, frequency: frequency, recipients: recipients}).then(function() {
+    toast('Report settings saved');
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+function downloadTestReport() {
+  var f = document.createElement('form');
+  f.method = 'POST';
+  f.action = '/api/v1/report-schedule/test';
+  f.target = '_blank';
+  var h = document.createElement('input');
+  h.type = 'hidden';
+  h.name = 'Authorization';
+  h.value = 'Bearer ' + getToken();
+  f.appendChild(h);
+  document.body.appendChild(f);
+  f.submit();
+  document.body.removeChild(f);
+}
+
+/* ============================
+   5. BRANDING
+   ============================ */
+function loadBranding() {
+  apiGet('/branding').then(function(data) {
+    document.getElementById('brandingContent').innerHTML =
+      '<div class="form-group"><label class="form-label">Organization Display Name</label>' +
+        '<input type="text" class="form-input" id="brandName" value="' + esc(data.org_display_name || '') + '" placeholder="Your Organization"></div>' +
+      '<div class="form-group"><label class="form-label">Logo URL</label>' +
+        '<input type="text" class="form-input" id="brandLogo" value="' + esc(data.logo_url || '') + '" placeholder="https://example.com/logo.png" oninput="updateBrandingPreview()"></div>' +
+      '<div class="form-row">' +
+        '<div class="form-group"><label class="form-label">Primary Color</label>' +
+          '<div class="color-input-wrap"><input type="color" id="brandPrimary" value="' + esc(data.primary_color || '#dc2626') + '" onchange="document.getElementById(\'brandPrimaryText\').value=this.value;updateBrandingPreview()"><input type="text" class="form-input" id="brandPrimaryText" value="' + esc(data.primary_color || '#dc2626') + '" oninput="document.getElementById(\'brandPrimary\').value=this.value;updateBrandingPreview()"></div></div>' +
+        '<div class="form-group"><label class="form-label">Secondary Color</label>' +
+          '<div class="color-input-wrap"><input type="color" id="brandSecondary" value="' + esc(data.secondary_color || '#111111') + '" onchange="document.getElementById(\'brandSecondaryText\').value=this.value;updateBrandingPreview()"><input type="text" class="form-input" id="brandSecondaryText" value="' + esc(data.secondary_color || '#111111') + '" oninput="document.getElementById(\'brandSecondary\').value=this.value;updateBrandingPreview()"></div></div>' +
+      '</div>' +
+      '<div class="form-group"><label class="form-label">Custom CSS</label>' +
+        '<textarea class="form-textarea" id="brandCSS" rows="5" placeholder="/* Custom CSS overrides */">' + esc(data.custom_css || '') + '</textarea></div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button class="btn btn-primary" onclick="saveBranding()">Save</button>' +
+        '<button class="btn btn-secondary" onclick="resetBranding()">Reset</button>' +
+      '</div>';
+    updateBrandingPreview();
+  }).catch(function() {
+    document.getElementById('brandingContent').innerHTML = '<div class="empty-state"><p>Failed to load branding settings.</p></div>';
+  });
+}
+
+function updateBrandingPreview() {
+  var logo = document.getElementById('brandLogo');
+  var card = document.getElementById('brandingPreviewCard');
+  var preview = document.getElementById('brandingPreview');
+  if (!logo) return;
+  var logoVal = logo.value;
+  if (logoVal) {
+    card.style.display = 'block';
+    var name = document.getElementById('brandName') ? document.getElementById('brandName').value : '';
+    var primary = document.getElementById('brandPrimaryText') ? document.getElementById('brandPrimaryText').value : '#dc2626';
+    var secondary = document.getElementById('brandSecondaryText') ? document.getElementById('brandSecondaryText').value : '#111';
+    preview.style.background = secondary;
+    preview.innerHTML = '<img src="' + esc(logoVal) + '" style="height:40px;max-width:160px;object-fit:contain" onerror="this.style.display=\'none\'">' +
+      '<span style="font-weight:700;font-size:1.1rem;color:' + esc(primary) + '">' + esc(name || 'Your Org') + '</span>';
+  } else {
+    card.style.display = 'none';
+  }
+}
+
+function saveBranding() {
+  var data = {
+    org_display_name: document.getElementById('brandName').value,
+    logo_url: document.getElementById('brandLogo').value,
+    primary_color: document.getElementById('brandPrimaryText').value,
+    secondary_color: document.getElementById('brandSecondaryText').value,
+    custom_css: document.getElementById('brandCSS').value
+  };
+  apiPost('/branding', data).then(function() {
+    toast('Branding saved');
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+function resetBranding() {
+  if (!confirm('Reset branding to defaults?')) return;
+  apiPost('/branding', {org_display_name: '', logo_url: '', primary_color: '#dc2626', secondary_color: '#111111', custom_css: ''}).then(function() {
+    toast('Branding reset');
+    loadBranding();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+/* ============================
+   6. RULES
+   ============================ */
+function loadRules() {
+  apiGet('/rules').then(function(data) {
+    var rules = data.rules || [];
+    var el = document.getElementById('rulesList');
+    if (!rules.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚡</div><p>No custom rules yet. Create one above.</p></div>'; return; }
+    el.innerHTML = rules.map(function(r) {
+      var typeClass = r.rule_type === 'regex' ? 'badge-purple' : r.rule_type === 'domain' ? 'badge-info' : 'badge-neutral';
+      var actClass = r.action === 'block' ? 'badge-error' : r.action === 'whitelist' ? 'badge-success' : 'badge-warning';
+      return '<div class="item-row">' +
+        '<div class="item-main">' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">' +
+            '<span style="font-weight:600;font-size:.92rem">' + esc(r.name) + '</span>' +
+            '<span class="badge ' + typeClass + '">' + esc(r.rule_type) + '</span>' +
+            '<span class="badge ' + actClass + '">' + esc(r.action) + '</span>' +
+          '</div>' +
+          '<div style="font-family:var(--mono);font-size:.82rem;color:var(--text-muted)">' + esc(r.pattern) + '</div>' +
+          (r.description ? '<div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">' + esc(r.description) + '</div>' : '') +
+        '</div>' +
+        '<div class="item-actions" style="gap:10px">' +
+          '<label class="toggle"><input type="checkbox" ' + (r.enabled !== false ? 'checked' : '') + ' onchange="toggleRule(\'' + r.id + '\', this.checked)"><span class="toggle-slider"></span></label>' +
+          '<button class="btn btn-sm btn-danger" onclick="deleteRule(\'' + r.id + '\', this)">Delete</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }).catch(function() {
+    document.getElementById('rulesList').innerHTML = '<div class="empty-state"><p>Failed to load rules.</p></div>';
+  });
+}
+
+function createRule() {
+  var data = {
+    name: document.getElementById('ruleName').value,
+    pattern: document.getElementById('rulePattern').value,
+    rule_type: document.getElementById('ruleType').value,
+    action: document.getElementById('ruleAction').value,
+    description: document.getElementById('ruleDesc').value
+  };
+  if (!data.name || !data.pattern) { toast('Name and pattern are required', 'error'); return; }
+  apiPost('/rules', data).then(function() {
+    toast('Rule created');
+    document.getElementById('ruleName').value = '';
+    document.getElementById('rulePattern').value = '';
+    document.getElementById('ruleDesc').value = '';
+    loadRules();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+function toggleRule(id, enabled) {
+  apiPatch('/rules/' + id + '/toggle', {enabled: enabled}).then(function() {
+    toast('Rule ' + (enabled ? 'enabled' : 'disabled'));
+  }).catch(function(e) {
+    toast(e.message, 'error');
+    loadRules();
+  });
+}
+
+function deleteRule(id, btn) {
+  if (!confirm('Delete this rule?')) return;
+  btn.disabled = true;
+  apiDel('/rules/' + id).then(function() {
+    toast('Rule deleted');
+    loadRules();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+  });
+}
+
+function testRules() {
+  var text = document.getElementById('ruleTestInput').value;
+  if (!text) { toast('Enter text to test', 'error'); return; }
+  var results = document.getElementById('ruleTestResults');
+  results.style.display = 'block';
+  results.textContent = 'Testing...';
+  apiPost('/rules/check', {text: text}).then(function(data) {
+    if (data.matches && data.matches.length) {
+      results.innerHTML = '<strong style="color:var(--red)">' + data.matches.length + ' rule(s) matched:</strong>\n\n' +
+        data.matches.map(function(m) {
+          return '→ ' + esc(m.name || 'Rule') + ' (' + esc(m.action || 'flag') + ')\n  Pattern: ' + esc(m.pattern || '');
+        }).join('\n\n');
+    } else {
+      results.textContent = 'No rules matched this text.';
+    }
+  }).catch(function(e) {
+    results.textContent = 'Error: ' + e.message;
+  });
+}
+
+/* ============================
+   7. ALERTS
+   ============================ */
+function loadAlerts() {
+  apiGet('/alerts/config').then(function(data) {
+    var el = document.getElementById('alertsContent');
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<span style="font-weight:500">Alerts Enabled</span>' +
+          '<label class="toggle"><input type="checkbox" id="alertEnabled" ' + (data.enabled ? 'checked' : '') + '><span class="toggle-slider"></span></label>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn btn-secondary" onclick="testAlert()">Test</button>' +
+          '<button class="btn btn-primary" onclick="saveAlerts()">Save</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-row">' +
+        '<div class="form-group"><label class="form-label">Platform</label>' +
+          '<select class="form-select" id="alertPlatform" onchange="updateAlertHelper()">' +
+            '<option value="slack"' + (data.platform === 'slack' ? ' selected' : '') + '>Slack</option>' +
+            '<option value="discord"' + (data.platform === 'discord' ? ' selected' : '') + '>Discord</option>' +
+            '<option value="teams"' + (data.platform === 'teams' ? ' selected' : '') + '>Microsoft Teams</option>' +
+          '</select></div>' +
+        '<div class="form-group"><label class="form-label">Alert Level</label>' +
+          '<select class="form-select" id="alertLevel">' +
+            '<option value="malicious"' + (data.alert_level === 'malicious' ? ' selected' : '') + '>Malicious Only</option>' +
+            '<option value="suspicious"' + (data.alert_level === 'suspicious' ? ' selected' : '') + '>Suspicious & Above</option>' +
+          '</select></div>' +
+      '</div>' +
+      '<div class="form-group"><label class="form-label">Webhook URL</label>' +
+        '<input type="text" class="form-input" id="alertWebhook" value="' + esc(data.webhook_url || '') + '" placeholder="https://hooks.slack.com/..."></div>' +
+      '<div class="form-hint" id="alertHelper">For Slack: create an Incoming Webhook in your Slack workspace settings.</div>';
+  }).catch(function() {
+    document.getElementById('alertsContent').innerHTML = '<div class="empty-state"><p>Failed to load alert settings.</p></div>';
+  });
+}
+
+function updateAlertHelper() {
+  var platform = document.getElementById('alertPlatform').value;
+  var el = document.getElementById('alertHelper');
+  var input = document.getElementById('alertWebhook');
+  if (platform === 'slack') {
+    el.textContent = 'For Slack: create an Incoming Webhook in your Slack workspace apps settings.';
+    input.placeholder = 'https://hooks.slack.com/services/...';
+  } else if (platform === 'discord') {
+    el.textContent = 'For Discord: go to Server Settings > Integrations > Webhooks, create one and copy the URL.';
+    input.placeholder = 'https://discord.com/api/webhooks/...';
+  } else if (platform === 'teams') {
+    el.textContent = 'For Teams: create an Incoming Webhook connector in your Teams channel.';
+    input.placeholder = 'https://outlook.office.com/webhook/...';
+  }
+}
+
+function saveAlerts() {
+  var data = {
+    enabled: document.getElementById('alertEnabled').checked,
+    platform: document.getElementById('alertPlatform').value,
+    alert_level: document.getElementById('alertLevel').value,
+    webhook_url: document.getElementById('alertWebhook').value
+  };
+  apiPost('/alerts/config', data).then(function() {
+    toast('Alert settings saved');
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+function testAlert() {
+  apiPost('/alerts/test', {}).then(function() {
+    toast('Test alert sent!');
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+/* ============================
+   8. INTEL
+   ============================ */
+function loadIntel() {
+  loadIntelStats();
+  loadIntelFeed();
+}
+
+function loadIntelStats() {
+  apiGet('/intel/stats').then(function(data) {
+    var bt = data.by_type || {};
+    document.getElementById('intelStatsGrid').innerHTML =
+      '<div class="stat-card"><div class="stat-value">' + (data.total_indicators || 0) + '</div><div class="stat-label">Total Indicators</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + (data.verified || 0) + '</div><div class="stat-label">Verified</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + (bt.domain || 0) + '</div><div class="stat-label">Domains</div></div>' +
+      '<div class="stat-card"><div class="stat-value">' + (bt.url || 0) + '</div><div class="stat-label">URLs</div></div>';
+  }).catch(function() {
+    document.getElementById('intelStatsGrid').innerHTML = '';
+  });
+}
+
+function loadIntelFeed() {
+  apiGet('/intel').then(function(data) {
+    var items = data.items || [];
+    var el = document.getElementById('intelFeedList');
+    if (!items.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">🧠</div><p>No threat indicators yet. Submit one above.</p></div>'; return; }
+    el.innerHTML = items.map(function(item) {
+      var tc = 'badge-neutral';
+      if (item.indicator_type === 'domain') tc = 'badge-info';
+      else if (item.indicator_type === 'url') tc = 'badge-purple';
+      else if (item.indicator_type === 'ip') tc = 'badge-warning';
+      else if (item.indicator_type === 'hash') tc = 'badge-error';
+      return '<div class="item-row">' +
+        '<div class="item-main">' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">' +
+            '<span class="badge ' + tc + '">' + esc(item.indicator_type || 'unknown') + '</span>' +
+            '<span style="font-family:var(--mono);font-size:.88rem;word-break:break-all">' + esc(item.indicator) + '</span>' +
+            (item.verified ? '<span class="badge badge-success">Verified</span>' : '') +
+          '</div>' +
+          '<div class="item-meta">' +
+            '<span>Reports: <strong>' + (item.report_count || 0) + '</strong></span>' +
+            '<span>Category: ' + esc(item.category || '—') + '</span>' +
+            '<span>' + fmtDate(item.created_at) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }).catch(function() {
+    document.getElementById('intelFeedList').innerHTML = '<div class="empty-state"><p>Failed to load intel feed.</p></div>';
+  });
+}
+
+function submitIntel() {
+  var data = {
+    indicator: document.getElementById('intelIndicator').value,
+    indicator_type: document.getElementById('intelType').value,
+    category: document.getElementById('intelCategory').value
+  };
+  if (!data.indicator) { toast('Enter an indicator', 'error'); return; }
+  apiPost('/intel', data).then(function() {
+    toast('Indicator submitted');
+    document.getElementById('intelIndicator').value = '';
+    loadIntelStats();
+    loadIntelFeed();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+/* ============================
+   9. SIMULATIONS
+   ============================ */
+function loadSimulations() {
+  apiGet('/simulations').then(function(data) {
+    var sims = data.simulations || [];
+    var el = document.getElementById('simList');
+    if (!sims.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">🎯</div><p>No simulations yet. Create one above.</p></div>'; return; }
+    el.innerHTML = sims.map(function(s) {
+      var sc = 'badge-neutral';
+      if (s.status === 'completed') sc = 'badge-success';
+      else if (s.status === 'active' || s.status === 'running') sc = 'badge-warning';
+      else if (s.status === 'draft') sc = 'badge-info';
+      var statsHtml = '';
+      if (s.stats) {
+        statsHtml = '<div class="stats-grid" style="margin-top:12px;margin-bottom:0">' +
+          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.sent || 0) + '</div><div class="stat-label">Sent</div></div>' +
+          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.opened || 0) + '</div><div class="stat-label">Opened</div></div>' +
+          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.clicked || 0) + '</div><div class="stat-label">Clicked</div></div>' +
+          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.credentials || 0) + '</div><div class="stat-label">Credentials</div></div>' +
+          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.risk_score != null ? s.stats.risk_score : '—') + '</div><div class="stat-label">Risk Score</div></div>' +
+        '</div>';
+      }
+      var actions = '';
+      if (s.status === 'draft') {
+        actions = '<button class="btn btn-sm btn-primary" onclick="sendSimulation(\'' + s.id + '\', this)">Send</button>';
+      } else if (s.status === 'active' || s.status === 'running') {
+        actions = '<button class="btn btn-sm btn-danger" onclick="endSimulation(\'' + s.id + '\', this)">End</button>';
+      }
+      return '<div class="card" style="margin-bottom:12px;border-color:var(--border)">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
+          '<div>' +
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">' +
+              '<span style="font-weight:600;font-size:.95rem">' + esc(s.name) + '</span>' +
+              '<span class="badge ' + sc + '">' + esc(s.status) + '</span>' +
+            '</div>' +
+            '<div class="item-meta">' +
+              '<span>Template: ' + esc(s.template_type || '—') + '</span>' +
+              '<span>Created: ' + fmtDate(s.created_at) + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="item-actions">' + actions + '</div>' +
+        '</div>' +
+        statsHtml +
+      '</div>';
+    }).join('');
+  }).catch(function() {
+    document.getElementById('simList').innerHTML = '<div class="empty-state"><p>Failed to load simulations.</p></div>';
+  });
+}
+
+function createSimulation() {
+  var targetsRaw = document.getElementById('simTargets').value;
+  var targets = targetsRaw.split(',').map(function(s) { return parseInt(s.trim()); }).filter(function(n) { return !isNaN(n); });
+  var data = {
+    name: document.getElementById('simName').value,
+    template_type: document.getElementById('simTemplate').value,
+    target_user_ids: targets
+  };
+  if (!data.name) { toast('Enter a campaign name', 'error'); return; }
+  apiPost('/simulations', data).then(function() {
+    toast('Campaign created');
+    document.getElementById('simName').value = '';
+    document.getElementById('simTargets').value = '';
+    loadSimulations();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+  });
+}
+
+function sendSimulation(id, btn) {
+  if (!confirm('Send this simulation to all targets?')) return;
+  btn.disabled = true;
+  apiPost('/simulations/' + id + '/send', {}).then(function() {
+    toast('Simulation sent');
+    loadSimulations();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+  });
+}
+
+function endSimulation(id, btn) {
+  if (!confirm('End this simulation?')) return;
+  btn.disabled = true;
+  apiPost('/simulations/' + id + '/end', {}).then(function() {
+    toast('Simulation ended');
+    loadSimulations();
+  }).catch(function(e) {
+    toast(e.message, 'error');
+    btn.disabled = false;
+  });
+}
+
+/* ============================
+   INIT
+   ============================ */
+loadedTabs['connections'] = true;
+loadConnections();
+</script>
 </body>
 </html>"""
 
