@@ -3145,7 +3145,7 @@ LANDING_PAGE = """<!DOCTYPE html>
             <p class="fade-up delay-3">Forward suspicious emails and get instant AI-powered verdicts. Detects social engineering, spoofed domains, and credential harvesting with 99.7% accuracy.</p>
             <div class="hero-buttons fade-up delay-4">
                 <a href="/login"><button class="btn-primary">Get Started</button></a>
-                <a href="/dashboard"><button class="btn-outline">View Live Demo</button></a>
+                <a href="/demo"><button class="btn-outline">View Live Demo</button></a>
             </div>
         </div>
     </section>
