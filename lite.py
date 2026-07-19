@@ -355,7 +355,7 @@ h1{font-size:24px;font-weight:800;margin-bottom:4px}
 <h1>SENTINEL <span style="color:#DC2626">Lite</span></h1>
 <p class="sub">Phishing protection made simple</p>
 <div id="error" class="error" style="display:none"></div>
-<div class="field"><label>Username</label><input id="username" type="text" autofocus></div>
+<div class="field"><label>Username or Email</label><input id="username" type="text" placeholder="username or email" autofocus></div>
 <div class="field"><label>Password</label><input id="password" type="password"></div>
 <button class="btn" onclick="doLogin()">Sign In</button>
 <a class="link" href="/lite/register">Don't have an account? Register</a>
@@ -465,7 +465,7 @@ class RegisterRequest(BaseModel):
     password: str
 
 class LoginRequest(BaseModel):
-    username: str
+    username: str  # accepts username OR email
     password: str
 
 class AnalyzeRequest(BaseModel):
@@ -524,13 +524,13 @@ async def lite_register(payload: RegisterRequest):
         org_id = db.get_or_create_default_org()
     user = db.user_create(payload.username, payload.email, pw_hash, org_id, user_id=None)
     if not user:
-        raise HTTPException(status_code=500, detail="Failed to create account")
+        raise HTTPException(status_code=409, detail="Email or username already taken")
     db.user_set_role(user["id"], "friend")
     return {"status": "success"}
 
 @app.post("/api/auth/login")
 async def lite_login(payload: LoginRequest):
-    user = db.user_get_by_username(payload.username)
+    user = db.user_resolve_login(payload.username)
     if not user or not _verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = _create_token(user["id"], user["username"])

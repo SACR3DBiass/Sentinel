@@ -518,6 +518,12 @@ def user_create(username: str, email: str, password_hash: str, org_id: str = Non
             result = sb.table("users").insert(data).execute()
             return result.data[0] if result.data else data
         except Exception as e:
+            msg = str(e).lower()
+            # Constraint violations (duplicate email/username) are NOT transient
+            # errors — fall back to local would just create a ghost user.
+            if "duplicate" in msg or "unique" in msg or "23505" in msg:
+                print(f"[SENTINEL] user_create rejected (duplicate): {e}", flush=True)
+                return None
             print(f"[SENTINEL] user_create (Supabase) failed: {e}", flush=True)
     # Local fallback
     return user_create_local(username, email, password_hash, user_id=user_id)
@@ -566,6 +572,12 @@ def user_get_by_email(email: str) -> Optional[dict]:
     except Exception as e:
         print(f"[SENTINEL] user_get_by_email (local) failed: {e}", flush=True)
     return None
+
+def user_resolve_login(identifier: str) -> Optional[dict]:
+    """Resolve a login identifier — email OR username — to a user dict."""
+    if "@" in identifier:
+        return user_get_by_email(identifier)
+    return user_get_by_username(identifier)
 
 def user_set_role(user_id: str, role: str) -> bool:
     sb = get_supabase()

@@ -346,7 +346,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6)
 
 class LoginRequest(BaseModel):
-    username: str
+    username: str  # accepts username OR email
     password: str
 
 class PasteEmailRequest(BaseModel):
@@ -1161,7 +1161,7 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
         org_id = db.get_or_create_default_org()
     user = user_create(payload.username, payload.email, password_hash, org_id)
     if not user:
-        raise HTTPException(status_code=500, detail="Failed to create account")
+        raise HTTPException(status_code=409, detail="Email or username already taken")
     token = create_token(user["id"], user["username"])
     response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=settings.JWT_EXPIRY_HOURS * 3600)
     return {"status": "success", "message": "Account created", "token": token, "username": user["username"], "user_id": user["id"]}
@@ -1170,7 +1170,7 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
 async def login(payload: LoginRequest, response: Response, request: Request):
     # Throttle brute-force: max 10 login attempts per IP per minute.
     enforce_rate_limit(request, "login", max_attempts=10)
-    user = user_get_by_username(payload.username)
+    user = db.user_resolve_login(payload.username)
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     user_update_last_login(user["id"])
@@ -3018,8 +3018,8 @@ LOGIN_PAGE = """<!DOCTYPE html>
             <div class="error" id="error"></div>
             <form id="loginForm">
                 <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" id="username" placeholder="Enter your username" required autocomplete="username">
+                    <label>Username or Email</label>
+                    <input type="text" id="username" placeholder="Enter your username or email" required autocomplete="username">
                 </div>
                 <div class="form-group">
                     <label>Password</label>
