@@ -659,8 +659,29 @@ class GroqAnalyzer:
 
         if not self.client:
             return self._mock_analysis(email_data)
+
+        # --- THREAT INTEL CROSS-REFERENCE ---
+        intel_context = ""
+        try:
+            check_indicators = []
+            if sender_domain:
+                check_indicators.append(sender_domain)
+            for u in (email_data.get("urls") or [])[:5]:
+                check_indicators.append(u)
+            if check_indicators:
+                intel_matches = db.intel_check(check_indicators)
+                if intel_matches:
+                    intel_lines = []
+                    for m in intel_matches:
+                        intel_lines.append(f"- {m.get('indicator', '')} ({m.get('indicator_type', '')}): "
+                                           f"reported {m.get('report_count', 1)} times, "
+                                           f"category={m.get('category', 'unknown')}")
+                    intel_context = "\n\nKNOWN THREAT INTELLIGENCE (cross-referenced from shared IOC feed):\n" + "\n".join(intel_lines)
+        except Exception:
+            pass
+
         messages = [
-            {"role": "system", "content": PHISHING_ANALYSIS_PROMPT},
+            {"role": "system", "content": PHISHING_ANALYSIS_PROMPT + intel_context},
             {"role": "user", "content": self._format_email(email_data)},
         ]
         last_error = None
@@ -1579,6 +1600,33 @@ async def _run_imap_scan(job_id: str, conn_data: dict):
                     store_set(conn_data["user_id"], email_id, record)
                     from db import report_save
                     report_save(email_id, conn_data["user_id"], record, conn_data.get("org_id"))
+
+                    # Trigger webhook alert for threats
+                    threat_level = verdict_data.get("threat_level", "safe")
+                    if threat_level in ("malicious", "suspicious"):
+                        try:
+                            await db.alert_send(conn_data["user_id"], parsed.get("subject", ""),
+                                                parsed.get("from_address", ""), threat_level,
+                                                verdict_data.get("confidence", 0) * 100,
+                                                verdict_data.get("reasoning_summary", ""))
+                        except Exception:
+                            pass
+
+                        # Auto-submit to threat intel feed
+                        try:
+                            urls = parsed.get("urls", [])
+                            sender_addr = parsed.get("from_address", "")
+                            if sender_addr and "@" in sender_addr:
+                                domain = sender_addr.split("@")[-1].strip().lower()
+                                if domain and "." in domain:
+                                    db.intel_submit(domain, "domain", "phishing_sender",
+                                                    conn_data["user_id"], conn_data.get("org_id"))
+                            for u in urls[:5]:
+                                db.intel_submit(u, "url", "phishing_url",
+                                                conn_data["user_id"], conn_data.get("org_id"))
+                        except Exception:
+                            pass
+
                     analyzed += 1
             except Exception as e:
                 print(f"[SENTINEL] Batch analysis error (batch {batch_start}): {e}", flush=True)
@@ -1878,6 +1926,22 @@ async def analyze_paste(payload: PasteEmailRequest, request: Request):
         },
     }
     store_set(user["user_id"], email_id, record)
+
+    # Trigger webhook alert for threats
+    threat_level = verdict_data.get("threat_level", "safe")
+    if threat_level in ("malicious", "suspicious"):
+        try:
+            await db.alert_send(user["user_id"], subject, from_addr, threat_level,
+                                verdict_data.get("confidence", 0) * 100,
+                                verdict_data.get("reasoning_summary", ""))
+        except Exception:
+            pass
+        try:
+            for u in (parsed.get("urls") or [])[:5]:
+                db.intel_submit(u, "url", "phishing_url", user["user_id"])
+        except Exception:
+            pass
+
     return {"status": "success", "email_id": email_id, "subject": subject, "from": from_addr, "verdict": verdict_data}
 
 @app.post("/api/v1/imap/check")
@@ -2044,6 +2108,30 @@ async def imap_check(request: Request):
                     }
                     store_set(user["user_id"], email_id, record)
                     total_processed.append({"email_id": email_id, "subject": parsed["subject"], "threat_level": verdict_data.get("threat_level"), "confidence": verdict_data.get("confidence")})
+
+                    # Trigger webhook alert for threats
+                    threat_level = verdict_data.get("threat_level", "safe")
+                    if threat_level in ("malicious", "suspicious"):
+                        try:
+                            await db.alert_send(user["user_id"], parsed.get("subject", ""),
+                                                parsed.get("from_address", ""), threat_level,
+                                                verdict_data.get("confidence", 0) * 100,
+                                                verdict_data.get("reasoning_summary", ""))
+                        except Exception:
+                            pass
+                        try:
+                            urls = parsed.get("urls", [])
+                            sender_addr = parsed.get("from_address", "")
+                            if sender_addr and "@" in sender_addr:
+                                domain = sender_addr.split("@")[-1].strip().lower()
+                                if domain and "." in domain:
+                                    db.intel_submit(domain, "domain", "phishing_sender",
+                                                    user["user_id"], conn.get("org_id"))
+                            for u in urls[:5]:
+                                db.intel_submit(u, "url", "phishing_url",
+                                                user["user_id"], conn.get("org_id"))
+                        except Exception:
+                            pass
         except Exception as e:
             err_msg = f"{conn.get('label')}: {e}"
             print(f"[SENTINEL] imap/check error: {err_msg}", flush=True)
@@ -2631,6 +2719,166 @@ async def check_rules(request: Request):
     text = body.get("text", "")
     matches = db.detection_rules_check(text, user["user_id"])
     return {"matches": [{"name": m["name"], "action": m["action"], "pattern": m["pattern"]} for m in matches]}
+
+
+# ============================================================================
+# WEBHOOK ALERTS API
+# ============================================================================
+@app.get("/api/v1/alerts/config")
+async def get_alert_config(request: Request):
+    user = require_auth(request)
+    config = db.alert_config_get(user["user_id"])
+    return config or {"enabled": False, "webhook_url": "", "platform": "slack", "alert_level": "malicious"}
+
+class AlertConfigRequest(BaseModel):
+    webhook_url: str = ""
+    platform: str = "slack"
+    alert_level: str = "malicious"
+    enabled: bool = True
+
+@app.post("/api/v1/alerts/config")
+async def save_alert_config(payload: AlertConfigRequest, request: Request):
+    user = require_auth(request)
+    result = db.alert_config_save(user["user_id"], payload.model_dump())
+    ip = _client_ip(request)
+    db.audit_log("alert_config_updated", user["user_id"], user.get("username", ""), ip=ip)
+    return {"status": "success", "config": result}
+
+@app.post("/api/v1/alerts/test")
+async def test_alert(request: Request):
+    user = require_auth(request)
+    config = db.alert_config_get(user["user_id"])
+    if not config or not config.get("webhook_url"):
+        raise HTTPException(status_code=400, detail="No webhook URL configured")
+    await db.alert_send(user["user_id"], "Test: Phishing Email Detected", "phisher@evil.com", "malicious", 97.5,
+                        "This is a test alert from SENTINEL to verify your webhook is working correctly.")
+    return {"status": "success", "message": "Test alert sent"}
+
+# ============================================================================
+# THREAT INTELLIGENCE API
+# ============================================================================
+@app.get("/api/v1/intel")
+async def list_intel(request: Request, indicator_type: str = None):
+    user = require_auth(request)
+    items = db.intel_list(indicator_type=indicator_type)
+    return {"items": items}
+
+class IntelSubmitRequest(BaseModel):
+    indicator: str
+    indicator_type: str = "domain"
+    category: str = "phishing"
+    notes: str = ""
+
+@app.post("/api/v1/intel")
+async def submit_intel(payload: IntelSubmitRequest, request: Request):
+    user = require_auth(request)
+    if not payload.indicator:
+        raise HTTPException(status_code=400, detail="Indicator required")
+    user_db = resolve_user_db(user)
+    org_id = user_db.get("org_id") if user_db else None
+    result = db.intel_submit(payload.indicator, payload.indicator_type, payload.category,
+                             user["user_id"], org_id, payload.notes)
+    ip = _client_ip(request)
+    db.audit_log("intel_submitted", user["user_id"], user.get("username", ""),
+                 f"indicator={payload.indicator} type={payload.indicator_type}", ip=ip)
+    return {"status": "success", "item": result}
+
+@app.post("/api/v1/intel/check")
+async def check_intel(request: Request):
+    """Check a list of indicators against the threat intel feed."""
+    user = require_auth(request)
+    body = await request.json()
+    indicators = body.get("indicators", [])
+    matches = db.intel_check(indicators)
+    return {"matches": matches}
+
+@app.get("/api/v1/intel/stats")
+async def intel_stats(request: Request):
+    user = require_auth(request)
+    return db.intel_stats()
+
+# ============================================================================
+# PHISHING SIMULATION API
+# ============================================================================
+@app.get("/api/v1/simulations")
+async def list_simulations(request: Request):
+    user = require_auth(request)
+    user_db = resolve_user_db(user)
+    org_id = user_db.get("org_id") if user_db else None
+    if not org_id:
+        return {"simulations": []}
+    return {"simulations": db.simulation_list(org_id)}
+
+class SimulationCreateRequest(BaseModel):
+    name: str
+    template_type: str = "credential_harvest"
+    target_user_ids: List[str] = []
+    subject: str = ""
+    sender_name: str = ""
+
+@app.post("/api/v1/simulations")
+async def create_simulation(payload: SimulationCreateRequest, request: Request):
+    user = require_auth(request)
+    user_db = resolve_user_db(user)
+    org_id = user_db.get("org_id") if user_db else None
+    if not org_id:
+        raise HTTPException(status_code=400, detail="No organization")
+    if not payload.name:
+        raise HTTPException(status_code=400, detail="Name required")
+    sim = db.simulation_create(org_id, user["user_id"], payload.name, payload.template_type,
+                               payload.target_user_ids, payload.subject, payload.sender_name)
+    ip = _client_ip(request)
+    db.audit_log("simulation_created", user["user_id"], user.get("username", ""), f"name={payload.name}", ip=ip)
+    return {"status": "success", "simulation": sim}
+
+@app.get("/api/v1/simulations/{sim_id}")
+async def get_simulation(sim_id: str, request: Request):
+    user = require_auth(request)
+    sim = db.simulation_get(sim_id)
+    if not sim:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    results = db.simulation_results_list(sim_id)
+    return {"simulation": sim, "results": results}
+
+@app.post("/api/v1/simulations/{sim_id}/send")
+async def send_simulation(sim_id: str, request: Request):
+    """Mark a simulation as sent to all targets."""
+    user = require_auth(request)
+    sim = db.simulation_get(sim_id)
+    if not sim:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    targets = sim.get("target_user_ids") or []
+    for uid in targets:
+        db.simulation_result_record(sim_id, uid, "sent")
+    db.simulation_update(sim_id, {"status": "active", "sent_count": len(targets)})
+    ip = _client_ip(request)
+    db.audit_log("simulation_sent", user["user_id"], user.get("username", ""),
+                 f"sim={sim['name']} targets={len(targets)}", ip=ip)
+    return {"status": "success", "sent_count": len(targets)}
+
+@app.post("/api/v1/simulations/{sim_id}/track")
+async def track_simulation_event(sim_id: str, request: Request):
+    """Track an event (open/click/credentials) for a simulation."""
+    body = await request.json()
+    event_type = body.get("event_type", "")
+    user_id = body.get("user_id", "")
+    if event_type not in ("opened", "clicked", "credentials"):
+        raise HTTPException(status_code=400, detail="Invalid event_type")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    db.simulation_result_record(sim_id, user_id, event_type)
+    sim = db.simulation_get(sim_id)
+    if sim:
+        field = f"{event_type}_count" if event_type != "credentials" else "credentials_count"
+        current = sim.get(field, 0) or 0
+        db.simulation_update(sim_id, {field: current + 1})
+    return {"status": "success"}
+
+@app.post("/api/v1/simulations/{sim_id}/end")
+async def end_simulation(sim_id: str, request: Request):
+    user = require_auth(request)
+    db.simulation_update(sim_id, {"status": "completed"})
+    return {"status": "success"}
 
 
 # ============================================================================
@@ -4318,6 +4566,25 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             var _ruleMatches = useState(null);
             var ruleMatches = _ruleMatches[0], setRuleMatches = _ruleMatches[1];
 
+            var _alertConfig = useState({enabled:false, webhook_url:'', platform:'slack', alert_level:'malicious'});
+            var alertConfig = _alertConfig[0], setAlertConfig = _alertConfig[1];
+            var _alertTestLoading = useState(false);
+            var alertTestLoading = _alertTestLoading[0], setAlertTestLoading = _alertTestLoading[1];
+
+            var _intel = useState([]);
+            var intel = _intel[0], setIntel = _intel[1];
+            var _intelStats = useState({});
+            var intelStats = _intelStats[0], setIntelStats = _intelStats[1];
+            var _newIntel = useState({indicator:'', indicator_type:'domain', category:'phishing', notes:''});
+            var newIntel = _newIntel[0], setNewIntel = _newIntel[1];
+
+            var _sims = useState([]);
+            var sims = _sims[0], setSims = _sims[1];
+            var _newSim = useState({name:'', template_type:'credential_harvest', target_user_ids:[], subject:'', sender_name:''});
+            var newSim = _newSim[0], setNewSim = _newSim[1];
+            var _selectedSim = useState(null);
+            var selectedSim = _selectedSim[0], setSelectedSim = _selectedSim[1];
+
             var showToast = function(type, msg) {
                 setToast({type:type, msg:msg});
                 setTimeout(function() { setToast(null); }, 3000);
@@ -4344,11 +4611,21 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             var fetchRules = useCallback(function() {
                 API.get('/rules').then(function(r) { setRules(r.rules || []); }).catch(function() {});
             }, []);
+            var fetchAlertConfig = useCallback(function() {
+                API.get('/alerts/config').then(function(r) { setAlertConfig(r); }).catch(function() {});
+            }, []);
+            var fetchIntel = useCallback(function() {
+                API.get('/intel').then(function(r) { setIntel(r.items || []); }).catch(function() {});
+                API.get('/intel/stats').then(function(r) { setIntelStats(r); }).catch(function() {});
+            }, []);
+            var fetchSims = useCallback(function() {
+                API.get('/simulations').then(function(r) { setSims(r.simulations || []); }).catch(function() {});
+            }, []);
 
             useEffect(function() {
                 if (!getToken()) { window.location.href = '/login'; return; }
-                fetchConns(); fetchScans(); fetchTeam(); fetchInvites(); fetchSchedule(); fetchBranding(); fetchRules();
-            }, [fetchConns, fetchScans, fetchTeam, fetchInvites, fetchSchedule, fetchBranding, fetchRules]);
+                fetchConns(); fetchScans(); fetchTeam(); fetchInvites(); fetchSchedule(); fetchBranding(); fetchRules(); fetchAlertConfig(); fetchIntel(); fetchSims();
+            }, [fetchConns, fetchScans, fetchTeam, fetchInvites, fetchSchedule, fetchBranding, fetchRules, fetchAlertConfig, fetchIntel, fetchSims]);
 
             var btnBase = { padding:'8px 16px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', border:'none', fontFamily:'Inter', transition:'all 0.2s' };
             var btnRed = Object.assign({}, btnBase, { background:'linear-gradient(135deg,#DC2626,#991B1B)', color:'#fff' });
@@ -4362,7 +4639,10 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                 {id:'team', label:'Team'},
                 {id:'reports', label:'Scheduled Reports'},
                 {id:'branding', label:'Branding'},
-                {id:'rules', label:'Detection Rules'}
+                {id:'rules', label:'Detection Rules'},
+                {id:'alerts', label:'Alerts'},
+                {id:'intel', label:'Threat Intel'},
+                {id:'simulations', label:'Simulations'}
             ];
 
             return React.createElement('div', { style:{minHeight:'100vh'} },
@@ -4444,6 +4724,215 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                                 )
                             );
                         })
+                    ) : tab === 'alerts' ? React.createElement('div', null,
+                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Real-Time Webhook Alerts'),
+                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Get instant notifications in Slack, Discord, or Microsoft Teams when threats are detected.'),
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20} },
+                                React.createElement('div', { style:{display:'flex',alignItems:'center',gap:10} },
+                                    React.createElement('div', { style:{width:36,height:36,borderRadius:8,background:alertConfig.enabled?'rgba(34,197,94,0.12)':'rgba(102,102,102,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16} }, alertConfig.enabled ? '\\u2713' : '\\u25CB'),
+                                    React.createElement('div', null,
+                                        React.createElement('div', { style:{fontSize:14,fontWeight:600} }, 'Alert Notifications'),
+                                        React.createElement('div', { style:{fontSize:11,color:'#666',marginTop:2} }, alertConfig.enabled ? 'Active' : 'Disabled')
+                                    )
+                                ),
+                                React.createElement('button', { onClick:function() {
+                                    var next = Object.assign({}, alertConfig, {enabled:!alertConfig.enabled});
+                                    setAlertConfig(next);
+                                    API.post('/alerts/config', next).then(function() { showToast('success', next.enabled ? 'Alerts enabled' : 'Alerts disabled'); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                                }, style:{width:44,height:24,borderRadius:12,background:alertConfig.enabled?'linear-gradient(135deg,#22C55E,#166534)':'#333',border:'none',cursor:'pointer',position:'relative',transition:'all 0.2s'} },
+                                    React.createElement('div', { style:{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:alertConfig.enabled?23:3,transition:'all 0.2s'} })
+                                )
+                            ),
+                            React.createElement('div', { style:{marginBottom:16} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Platform'),
+                                React.createElement('select', { value:alertConfig.platform, onChange:function(e) { setAlertConfig(Object.assign({}, alertConfig, {platform:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
+                                    React.createElement('option', { value:'slack' }, 'Slack'),
+                                    React.createElement('option', { value:'discord' }, 'Discord'),
+                                    React.createElement('option', { value:'teams' }, 'Microsoft Teams')
+                                )
+                            ),
+                            React.createElement('div', { style:{marginBottom:16} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Alert Threshold'),
+                                React.createElement('select', { value:alertConfig.alert_level, onChange:function(e) { setAlertConfig(Object.assign({}, alertConfig, {alert_level:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
+                                    React.createElement('option', { value:'malicious' }, 'Malicious only (recommended)'),
+                                    React.createElement('option', { value:'suspicious' }, 'Malicious + Suspicious')
+                                )
+                            ),
+                            React.createElement('div', { style:{marginBottom:16} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Webhook URL'),
+                                React.createElement('input', { value:alertConfig.webhook_url||'', onChange:function(e) { setAlertConfig(Object.assign({}, alertConfig, {webhook_url:e.target.value})); }, placeholder:alertConfig.platform==='slack'?'https://hooks.slack.com/services/...':alertConfig.platform==='discord'?'https://discord.com/api/webhooks/...':'https://outlook.office.com/webhook/...', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'JetBrains Mono'} })
+                            ),
+                            React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:10,padding:14,marginBottom:16} },
+                                React.createElement('div', { style:{fontSize:12,fontWeight:600,color:'#888',marginBottom:6} }, 'How to get a webhook URL:'),
+                                React.createElement('div', { style:{fontSize:11,color:'#666',lineHeight:1.6} },
+                                    alertConfig.platform === 'slack' ? 'In Slack, go to Apps > Incoming Webhooks > Add to Slack. Choose a channel and copy the Webhook URL.' :
+                                    alertConfig.platform === 'discord' ? 'In Discord, go to Server Settings > Integrations > Webhooks > New Webhook. Choose a channel and copy the URL.' :
+                                    'In Teams, go to a channel > ... > Connectors > Incoming Webhook. Configure and copy the URL.'
+                                )
+                            ),
+                            React.createElement('div', { style:{display:'flex',gap:8} },
+                                React.createElement('button', { onClick:function() {
+                                    API.post('/alerts/config', alertConfig).then(function() { showToast('success', 'Alert config saved'); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                                }, style:btnRed }, 'Save Config'),
+                                React.createElement('button', { onClick:function() {
+                                    setAlertTestLoading(true);
+                                    API.post('/alerts/test', {}).then(function() { showToast('success', 'Test alert sent! Check your channel.'); }).catch(function(e) { showToast('error', e.message || 'Failed to send test'); }).finally(function() { setAlertTestLoading(false); });
+                                }, disabled:alertTestLoading||!alertConfig.webhook_url, style:Object.assign({}, btnDark, {opacity:(alertTestLoading||!alertConfig.webhook_url)?0.5:1}) }, alertTestLoading ? 'Sending...' : 'Send Test Alert')
+                            )
+                        )
+                    ) : tab === 'intel' ? React.createElement('div', null,
+                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Threat Intelligence Feed'),
+                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Shared IOC database. Threats detected by any SENTINEL org are cross-referenced during analysis.'),
+                        React.createElement('div', { className:'stats-grid', style:{gridTemplateColumns:'repeat(4, 1fr)',marginBottom:20} },
+                            React.createElement('div', { style:cardStyle },
+                                React.createElement('div', { style:{fontSize:11,color:'#888',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:4} }, 'Total IOCs'),
+                                React.createElement('div', { style:{fontSize:24,fontWeight:800,fontFamily:'JetBrains Mono',color:'#DC2626'} }, intelStats.total_indicators||0)
+                            ),
+                            React.createElement('div', { style:cardStyle },
+                                React.createElement('div', { style:{fontSize:11,color:'#888',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:4} }, 'Verified'),
+                                React.createElement('div', { style:{fontSize:24,fontWeight:800,fontFamily:'JetBrains Mono',color:'#22C55E'} }, intelStats.verified||0)
+                            ),
+                            React.createElement('div', { style:cardStyle },
+                                React.createElement('div', { style:{fontSize:11,color:'#888',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:4} }, 'Domains'),
+                                React.createElement('div', { style:{fontSize:24,fontWeight:800,fontFamily:'JetBrains Mono',color:'#3B82F6'} }, (intelStats.by_type||{}).domain||0)
+                            ),
+                            React.createElement('div', { style:cardStyle },
+                                React.createElement('div', { style:{fontSize:11,color:'#888',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:4} }, 'URLs'),
+                                React.createElement('div', { style:{fontSize:24,fontWeight:800,fontFamily:'JetBrains Mono',color:'#EAB308'} }, (intelStats.by_type||{}).url||0)
+                            )
+                        ),
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Submit Indicator'),
+                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'2fr 1fr 1fr',gap:12,marginBottom:12} },
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Indicator (domain, URL, IP)'),
+                                    React.createElement('input', { value:newIntel.indicator, onChange:function(e) { setNewIntel(Object.assign({}, newIntel, {indicator:e.target.value})); }, placeholder:'evil-domain.com', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'JetBrains Mono'} })
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Type'),
+                                    React.createElement('select', { value:newIntel.indicator_type, onChange:function(e) { setNewIntel(Object.assign({}, newIntel, {indicator_type:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
+                                        React.createElement('option', { value:'domain' }, 'Domain'),
+                                        React.createElement('option', { value:'url' }, 'URL'),
+                                        React.createElement('option', { value:'ip' }, 'IP Address'),
+                                        React.createElement('option', { value:'hash' }, 'File Hash')
+                                    )
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Category'),
+                                    React.createElement('select', { value:newIntel.category, onChange:function(e) { setNewIntel(Object.assign({}, newIntel, {category:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
+                                        React.createElement('option', { value:'phishing' }, 'Phishing'),
+                                        React.createElement('option', { value:'phishing_sender' }, 'Phishing Sender'),
+                                        React.createElement('option', { value:'phishing_url' }, 'Phishing URL'),
+                                        React.createElement('option', { value:'malware' }, 'Malware'),
+                                        React.createElement('option', { value:'credential_harvest' }, 'Credential Harvest'),
+                                        React.createElement('option', { value:'other' }, 'Other')
+                                    )
+                                )
+                            ),
+                            React.createElement('button', { onClick:function() {
+                                if (!newIntel.indicator) { showToast('error', 'Indicator required'); return; }
+                                API.post('/intel', newIntel).then(function() { showToast('success', 'Indicator submitted'); setNewIntel({indicator:'', indicator_type:'domain', category:'phishing', notes:''}); fetchIntel(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                            }, style:btnRed }, '+ Submit Indicator')
+                        ),
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Feed (' + intel.length + ' indicators)'),
+                            intel.length === 0 ? React.createElement('div', { style:{textAlign:'center',padding:'40px 0',color:'#666',fontSize:14} }, 'No indicators yet. Submit one above or they will be auto-added when threats are detected.') :
+                            React.createElement('div', { style:{maxHeight:400,overflowY:'auto'} },
+                                intel.slice(0, 30).map(function(item) {
+                                    var typeColors = {domain:'#3B82F6',url:'#EAB308',ip:'#A855F7',hash:'#22C55E'};
+                                    return React.createElement('div', { key:item.id, style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,marginBottom:6} },
+                                        React.createElement('div', null,
+                                            React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
+                                                React.createElement('span', { style:{fontSize:10,fontWeight:700,color:typeColors[item.indicator_type]||'#888',background:(typeColors[item.indicator_type]||'#888')+'20',padding:'2px 6px',borderRadius:4,textTransform:'uppercase'} }, item.indicator_type),
+                                                React.createElement('span', { style:{fontSize:13,fontFamily:'JetBrains Mono',fontWeight:500} }, item.indicator),
+                                                item.verified ? React.createElement('span', { style:{fontSize:9,color:'#22C55E',background:'rgba(34,197,94,0.12)',padding:'1px 6px',borderRadius:4} }, 'VERIFIED') : null
+                                            ),
+                                            React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:2} }, 'Reported ' + (item.report_count||1) + ' time(s) | ' + item.category + ' | ' + new Date(item.first_seen||item.created_at).toLocaleDateString())
+                                        )
+                                    );
+                                })
+                            )
+                        )
+                    ) : tab === 'simulations' ? React.createElement('div', null,
+                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Phishing Simulation Training'),
+                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Send simulated phishing emails to your team. Track who clicks and generate training reports.'),
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Create Campaign'),
+                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12} },
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Campaign Name'),
+                                    React.createElement('input', { value:newSim.name, onChange:function(e) { setNewSim(Object.assign({}, newSim, {name:e.target.value})); }, placeholder:'Q3 Security Test', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Template'),
+                                    React.createElement('select', { value:newSim.template_type, onChange:function(e) { setNewSim(Object.assign({}, newSim, {template_type:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
+                                        React.createElement('option', { value:'credential_harvest' }, 'Credential Harvest (fake login)'),
+                                        React.createElement('option', { value:'urgent_request' }, 'Urgent Request (CEO fraud)'),
+                                        React.createElement('option', { value:'package_delivery' }, 'Package Delivery Notice'),
+                                        React.createElement('option', { value:'tax_refund' }, 'Tax Refund / Government'),
+                                        React.createElement('option', { value:'it_update' }, 'IT Password Reset')
+                                    )
+                                )
+                            ),
+                            React.createElement('div', { style:{marginBottom:12} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Target Users (IDs, comma separated — leave empty for all)'),
+                                React.createElement('input', { value:(newSim.target_user_ids||[]).join(', '), onChange:function(e) { setNewSim(Object.assign({}, newSim, {target_user_ids:e.target.value.split(',').map(function(s){return s.trim();}).filter(Boolean)})); }, placeholder:'user-abc123, user-def456', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'JetBrains Mono'} })
+                            ),
+                            React.createElement('button', { onClick:function() {
+                                if (!newSim.name) { showToast('error', 'Name required'); return; }
+                                API.post('/simulations', newSim).then(function() { showToast('success', 'Campaign created'); setNewSim({name:'', template_type:'credential_harvest', target_user_ids:[], subject:'', sender_name:''}); fetchSims(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                            }, style:btnRed }, '+ Create Campaign')
+                        ),
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Campaigns (' + sims.length + ')'),
+                            sims.length === 0 ? React.createElement('div', { style:{textAlign:'center',padding:'40px 0',color:'#666',fontSize:14} }, 'No campaigns yet. Create one above to get started.') :
+                            sims.map(function(s) {
+                                var statusColors = {draft:'#888',active:'#22C55E',completed:'#3B82F6'};
+                                var riskScore = s.sent_count > 0 ? Math.round(((s.clicked_count||0) + (s.credentials_count||0)) / Math.max(s.sent_count,1) * 100) : 0;
+                                return React.createElement('div', { key:s.id, style:{padding:'14px 16px',background:'#0a0a0a',border:'1px solid #222',borderRadius:10,marginBottom:8} },
+                                    React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10} },
+                                        React.createElement('div', null,
+                                            React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
+                                                React.createElement('span', { style:{fontSize:14,fontWeight:600} }, s.name),
+                                                React.createElement('span', { style:{fontSize:10,fontWeight:700,color:statusColors[s.status]||'#888',background:(statusColors[s.status]||'#888')+'20',padding:'2px 8px',borderRadius:4,textTransform:'uppercase'} }, s.status)
+                                            ),
+                                            React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:2} }, 'Template: ' + s.template_type.replace(/_/g,' ') + ' | Created: ' + new Date(s.created_at).toLocaleDateString())
+                                        ),
+                                        React.createElement('div', { style:{display:'flex',gap:6} },
+                                            s.status === 'draft' ? React.createElement('button', { onClick:function() {
+                                                API.post('/simulations/' + s.id + '/send', {}).then(function() { showToast('success', 'Campaign activated'); fetchSims(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                                            }, style:Object.assign({}, btnRed, {fontSize:11,padding:'5px 10px'}) }, 'Send') : null,
+                                            s.status === 'active' ? React.createElement('button', { onClick:function() {
+                                                API.post('/simulations/' + s.id + '/end', {}).then(function() { showToast('success', 'Campaign ended'); fetchSims(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                                            }, style:Object.assign({}, btnDark, {fontSize:11,padding:'5px 10px'}) }, 'End') : null
+                                        )
+                                    ),
+                                    React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8} },
+                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
+                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:'#888'} }, s.sent_count||0),
+                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Sent')
+                                        ),
+                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
+                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:'#3B82F6'} }, s.opened_count||0),
+                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Opened')
+                                        ),
+                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
+                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:'#EAB308'} }, s.clicked_count||0),
+                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Clicked')
+                                        ),
+                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
+                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:'#EF4444'} }, s.credentials_count||0),
+                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Credentials')
+                                        ),
+                                        React.createElement('div', { style:{textAlign:'center',padding:'8px',background:'#111',borderRadius:6} },
+                                            React.createElement('div', { style:{fontSize:18,fontWeight:800,fontFamily:'JetBrains Mono',color:riskScore>50?'#EF4444':riskScore>20?'#EAB308':'#22C55E'} }, riskScore + '%'),
+                                            React.createElement('div', { style:{fontSize:9,color:'#666',textTransform:'uppercase'} }, 'Risk Score')
+                                        )
+                                    )
+                                );
+                            })
+                        )
                     ) : tab === 'team' ? React.createElement('div', null,
                         React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Team Members'),
                         React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Manage who has access to your organization.'),

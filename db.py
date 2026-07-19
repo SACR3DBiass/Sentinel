@@ -2428,3 +2428,262 @@ def detection_rules_check(text: str, user_id: str) -> List[dict]:
         except Exception:
             pass
     return matches
+
+# ============================================================================
+# WEBHOOK ALERTS (SLACK / DISCORD / TEAMS)
+# ============================================================================
+
+def alert_config_get(user_id: str) -> Optional[dict]:
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("alert_config").select("*").eq("user_id", user_id).execute()
+            if r.data:
+                return r.data[0]
+        except Exception:
+            pass
+    path = os.path.join(DATA_DIR, user_id, "alert_config.json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def alert_config_save(user_id: str, data: dict) -> dict:
+    entry = {"user_id": user_id, "webhook_url": data.get("webhook_url", ""),
+             "platform": data.get("platform", "slack"), "alert_level": data.get("alert_level", "malicious"),
+             "enabled": data.get("enabled", True), "updated_at": datetime.utcnow().isoformat()}
+    sb = get_supabase()
+    if sb:
+        try:
+            existing = sb.table("alert_config").select("user_id").eq("user_id", user_id).execute()
+            if existing.data:
+                sb.table("alert_config").update(entry).eq("user_id", user_id).execute()
+            else:
+                sb.table("alert_config").insert(entry).execute()
+            return entry
+        except Exception as e:
+            print(f"[SENTINEL] alert_config_save (Supabase) failed: {e}", flush=True)
+    user_dir = os.path.join(DATA_DIR, user_id)
+    os.makedirs(user_dir, exist_ok=True)
+    with open(os.path.join(user_dir, "alert_config.json"), "w") as f:
+        json.dump(entry, f)
+    return entry
+
+async def alert_send(user_id: str, email_subject: str, sender: str, threat_level: str,
+                     confidence: float, reasoning: str = ""):
+    """Send a webhook alert for a detected threat."""
+    config = alert_config_get(user_id)
+    if not config or not config.get("enabled") or not config.get("webhook_url"):
+        return
+    alert_level = config.get("alert_level", "malicious")
+    if alert_level == "malicious" and threat_level not in ("malicious",):
+        if alert_level == "suspicious" and threat_level not in ("malicious", "suspicious"):
+            return
+    platform = config.get("platform", "slack")
+    url = config["webhook_url"]
+    color = "#DC2626" if threat_level == "malicious" else "#EAB308" if threat_level == "suspicious" else "#22C55E"
+    emoji = "\u2620" if threat_level == "malicious" else "\u26a0" if threat_level == "suspicious" else "\u2705"
+    try:
+        import httpx
+        if platform == "slack":
+            payload = {"attachments": [{"color": color, "blocks": [
+                {"type": "header", "text": {"type": "plain_text", "text": f"{emoji} SENTINEL Threat Alert"}},
+                {"type": "section", "fields": [
+                    {"type": "mrkdwn", "text": f"*Verdict:*\n{threat_level.upper()}"},
+                    {"type": "mrkdwn", "text": f"*Confidence:*\n{confidence:.0f}%"},
+                ]},
+                {"type": "section", "fields": [
+                    {"type": "mrkdwn", "text": f"*From:*\n{sender}"},
+                    {"type": "mrkdwn", "text": f"*Subject:*\n{email_subject[:100]}"},
+                ]},
+                {"type": "section", "text": {"type": "mrkdwn", "text": f"*Analysis:*\n{reasoning[:300]}"}},
+            ]}]}
+        elif platform == "discord":
+            payload = {"embeds": [{"title": f"{emoji} SENTINEL Threat Alert", "color": int(color[1:], 16),
+                "fields": [
+                    {"name": "Verdict", "value": threat_level.upper(), "inline": True},
+                    {"name": "Confidence", "value": f"{confidence:.0f}%", "inline": True},
+                    {"name": "From", "value": sender[:100], "inline": False},
+                    {"name": "Subject", "value": email_subject[:100], "inline": False},
+                    {"name": "Analysis", "value": reasoning[:300] or "N/A", "inline": False},
+                ]}]}
+        elif platform == "teams":
+            payload = {"@type": "MessageCard", "themeColor": color.replace("#", ""),
+                "title": f"{emoji} SENTINEL Threat Alert",
+                "sections": [{"facts": [
+                    {"name": "Verdict", "value": threat_level.upper()},
+                    {"name": "Confidence", "value": f"{confidence:.0f}%"},
+                    {"name": "From", "value": sender},
+                    {"name": "Subject", "value": email_subject[:100]},
+                ], "text": reasoning[:300] or ""}]}
+        else:
+            return
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code >= 300:
+                print(f"[SENTINEL] Webhook alert failed ({resp.status_code}): {resp.text[:200]}", flush=True)
+    except Exception as e:
+        print(f"[SENTINEL] alert_send error: {e}", flush=True)
+
+# ============================================================================
+# THREAT INTELLIGENCE FEED
+# ============================================================================
+
+def intel_list(indicator_type: str = None, limit: int = 50) -> List[dict]:
+    sb = get_supabase()
+    if sb:
+        try:
+            q = sb.table("threat_intel").select("*").order("report_count", desc=True).limit(limit)
+            if indicator_type:
+                q = q.eq("indicator_type", indicator_type)
+            r = q.execute()
+            return r.data or []
+        except Exception:
+            pass
+    return []
+
+def intel_submit(indicator: str, indicator_type: str, category: str, reported_by: str,
+                 org_id: str = None, notes: str = "") -> Optional[dict]:
+    entry = {"id": str(uuid.uuid4()), "indicator": indicator, "indicator_type": indicator_type,
+             "category": category, "reported_by": reported_by, "org_id": org_id,
+             "report_count": 1, "notes": notes, "verified": False,
+             "first_seen": datetime.utcnow().isoformat(), "last_seen": datetime.utcnow().isoformat()}
+    sb = get_supabase()
+    if sb:
+        try:
+            existing = sb.table("threat_intel").select("*").eq("indicator", indicator).execute()
+            if existing.data:
+                old = existing.data[0]
+                new_count = (old.get("report_count") or 0) + 1
+                sb.table("threat_intel").update({
+                    "report_count": new_count, "last_seen": datetime.utcnow().isoformat()
+                }).eq("id", old["id"]).execute()
+                entry = {**old, "report_count": new_count}
+            else:
+                sb.table("threat_intel").insert(entry).execute()
+            return entry
+        except Exception as e:
+            print(f"[SENTINEL] intel_submit failed: {e}", flush=True)
+    return entry
+
+def intel_check(indicators: List[str]) -> List[dict]:
+    """Check a list of indicators (domains, IPs, URLs) against the intel feed."""
+    if not indicators:
+        return []
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("threat_intel").select("*").in_("indicator", indicators).execute()
+            return r.data or []
+        except Exception:
+            pass
+    return []
+
+def intel_stats() -> dict:
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("threat_intel").select("indicator_type, report_count, verified").execute()
+            rows = r.data or []
+            total = len(rows)
+            verified = sum(1 for row in rows if row.get("verified"))
+            types = Counter(row.get("indicator_type", "unknown") for row in rows)
+            top = sorted(rows, key=lambda x: x.get("report_count", 0), reverse=True)[:10]
+            return {"total_indicators": total, "verified": verified,
+                    "by_type": dict(types), "top_reported": top}
+        except Exception:
+            pass
+    return {"total_indicators": 0, "verified": 0, "by_type": {}, "top_reported": []}
+
+# ============================================================================
+# PHISHING SIMULATION TRAINING
+# ============================================================================
+
+def simulation_create(org_id: str, created_by: str, name: str, template_type: str,
+                      target_user_ids: List[str], subject: str = "", sender_name: str = "") -> Optional[dict]:
+    entry = {"id": str(uuid.uuid4()), "org_id": org_id, "created_by": created_by,
+             "name": name, "template_type": template_type, "target_user_ids": target_user_ids,
+             "subject": subject, "sender_name": sender_name,
+             "status": "draft", "sent_count": 0, "opened_count": 0,
+             "clicked_count": 0, "credentials_count": 0,
+             "created_at": datetime.utcnow().isoformat()}
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("simulations").insert(entry).execute()
+            return entry
+        except Exception as e:
+            print(f"[SENTINEL] simulation_create failed: {e}", flush=True)
+    return entry
+
+def simulation_list(org_id: str, limit: int = 20) -> List[dict]:
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("simulations").select("*").eq("org_id", org_id).order("created_at", desc=True).limit(limit).execute()
+            return r.data or []
+        except Exception:
+            pass
+    return []
+
+def simulation_get(sim_id: str) -> Optional[dict]:
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("simulations").select("*").eq("id", sim_id).execute()
+            if r.data:
+                return r.data[0]
+        except Exception:
+            pass
+    return None
+
+def simulation_update(sim_id: str, data: dict) -> bool:
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("simulations").update(data).eq("id", sim_id).execute()
+            return True
+        except Exception:
+            pass
+    return False
+
+def simulation_result_record(sim_id: str, user_id: str, event_type: str, ip_address: str = "",
+                              user_agent: str = "") -> bool:
+    now = datetime.utcnow().isoformat()
+    update_fields = {}
+    if event_type == "sent":
+        update_fields["sent_at"] = now
+    elif event_type == "opened":
+        update_fields["opened_at"] = now
+    elif event_type == "clicked":
+        update_fields["clicked_at"] = now
+    elif event_type == "credentials":
+        update_fields["credentials_submitted_at"] = now
+    update_fields["ip_address"] = ip_address
+    update_fields["user_agent"] = user_agent
+    sb = get_supabase()
+    if sb:
+        try:
+            existing = sb.table("simulation_results").select("id").eq("simulation_id", sim_id).eq("user_id", user_id).execute()
+            if existing.data:
+                sb.table("simulation_results").update(update_fields).eq("id", existing.data[0]["id"]).execute()
+            else:
+                update_fields["id"] = str(uuid.uuid4())
+                update_fields["simulation_id"] = sim_id
+                update_fields["user_id"] = user_id
+                sb.table("simulation_results").insert(update_fields).execute()
+            return True
+        except Exception as e:
+            print(f"[SENTINEL] simulation_result_record failed: {e}", flush=True)
+    return False
+
+def simulation_results_list(sim_id: str) -> List[dict]:
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("simulation_results").select("*").eq("simulation_id", sim_id).execute()
+            return r.data or []
+        except Exception:
+            pass
+    return []
