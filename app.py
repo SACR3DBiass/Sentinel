@@ -3146,7 +3146,10 @@ LOGIN_PAGE = """<!DOCTYPE html>
                 </div>
                 <div class="form-group">
                     <label>Password</label>
-                    <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password">
+                    <div style="position:relative">
+                        <input type="password" id="password" placeholder="Enter your password" required autocomplete="current-password" style="width:100%;padding-right:44px">
+                        <button type="button" onclick="togglePw('password',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#666;padding:4px" aria-label="Toggle password visibility"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-primary" id="submitBtn">Log In</button>
             </form>
@@ -3158,6 +3161,14 @@ LOGIN_PAGE = """<!DOCTYPE html>
         <p class="footer-text fade-up" style="animation-delay:0.2s">Don't have an account? <a href="/register">Sign up</a></p>
     </div>
     <script>
+        function togglePw(id, btn) {
+            var inp = document.getElementById(id);
+            var isPw = inp.type === 'password';
+            inp.type = isPw ? 'text' : 'password';
+            btn.innerHTML = isPw
+                ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        }
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             var errEl = document.getElementById('error');
@@ -3256,7 +3267,10 @@ REGISTER_PAGE = """<!DOCTYPE html>
                 </div>
                 <div class="form-group">
                     <label>Password</label>
-                    <input type="password" id="password" placeholder="Min 6 characters" required minlength="6" autocomplete="new-password" oninput="updateStrength(this.value)">
+                    <div style="position:relative">
+                        <input type="password" id="password" placeholder="Min 8 characters" required minlength="8" autocomplete="new-password" oninput="updateStrength(this.value)" style="width:100%;padding-right:44px">
+                        <button type="button" onclick="togglePw('password',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#666;padding:4px" aria-label="Toggle password visibility"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    </div>
                     <div class="strength-bar"><div class="strength-fill" id="strengthFill" style="width:0%;background:#222"></div></div>
                 </div>
                 <button type="submit" class="btn btn-primary" id="submitBtn">Create Account</button>
@@ -3269,6 +3283,14 @@ REGISTER_PAGE = """<!DOCTYPE html>
         <p class="footer-text fade-up" style="animation-delay:0.2s">Already have an account? <a href="/login">Log in</a></p>
     </div>
     <script>
+        function togglePw(id, btn) {
+            var inp = document.getElementById(id);
+            var isPw = inp.type === 'password';
+            inp.type = isPw ? 'text' : 'password';
+            btn.innerHTML = isPw
+                ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        }
         function updateStrength(pw) {
             var fill = document.getElementById('strengthFill');
             var score = 0;
@@ -4926,7 +4948,10 @@ INVITE_ACCEPT_PAGE = """<!DOCTYPE html>
             </div>
             <div class="form-group">
                 <label class="label">Password</label>
-                <input id="password" class="input" type="password" placeholder="Your password" autocomplete="current-password">
+                <div style="position:relative">
+                    <input id="password" class="input" type="password" placeholder="Your password" autocomplete="current-password" style="width:100%;padding-right:44px">
+                    <button type="button" onclick="togglePw('password',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#666;padding:4px" aria-label="Toggle password visibility"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
             </div>
             <button id="login-btn" class="btn btn-red" onclick="doLogin()">Log In &amp; Accept Invite</button>
             <div class="divider">or</div>
@@ -4944,7 +4969,10 @@ INVITE_ACCEPT_PAGE = """<!DOCTYPE html>
             </div>
             <div class="form-group">
                 <label class="label">Password</label>
-                <input id="reg-password" class="input" type="password" placeholder="Choose a password" autocomplete="new-password">
+                <div style="position:relative">
+                    <input id="reg-password" class="input" type="password" placeholder="Choose a password" autocomplete="new-password" style="width:100%;padding-right:44px">
+                    <button type="button" onclick="togglePw('reg-password',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#666;padding:4px" aria-label="Toggle password visibility"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
             </div>
             <button id="reg-btn" class="btn btn-red" onclick="doRegister()">Create Account &amp; Accept Invite</button>
             <div class="divider">or</div>
@@ -4957,6 +4985,14 @@ INVITE_ACCEPT_PAGE = """<!DOCTYPE html>
     </div>
 
     <script>
+        function togglePw(id, btn) {
+            var inp = document.getElementById(id);
+            var isPw = inp.type === 'password';
+            inp.type = isPw ? 'text' : 'password';
+            btn.innerHTML = isPw
+                ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+        }
         var TOKEN = '{{TOKEN}}';
         var API_BASE = window.location.origin;
 

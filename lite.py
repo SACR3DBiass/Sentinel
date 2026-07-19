@@ -356,11 +356,19 @@ h1{font-size:24px;font-weight:800;margin-bottom:4px}
 <p class="sub">Phishing protection made simple</p>
 <div id="error" class="error" style="display:none"></div>
 <div class="field"><label>Username or Email</label><input id="username" type="text" placeholder="username or email" autofocus></div>
-<div class="field"><label>Password</label><input id="password" type="password"></div>
+<div class="field"><label>Password</label><div style="position:relative"><input id="password" type="password" style="width:100%;padding-right:44px"><button type="button" onclick="togglePw('password',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#666;padding:4px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
 <button class="btn" onclick="doLogin()">Sign In</button>
 <a class="link" href="/lite/register">Don't have an account? Register</a>
 </div>
 <script>
+function togglePw(id, btn) {
+  var inp = document.getElementById(id);
+  var isPw = inp.type === 'password';
+  inp.type = isPw ? 'text' : 'password';
+  btn.innerHTML = isPw
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+}
 document.getElementById('password').addEventListener('keydown',function(e){if(e.key==='Enter')doLogin()});
 function doLogin(){
   var u=document.getElementById('username').value.trim();
@@ -408,11 +416,19 @@ h1{font-size:24px;font-weight:800;margin-bottom:4px}
 <div id="error" class="error" style="display:none"></div>
 <div class="field"><label>Username</label><input id="username" type="text" autofocus></div>
 <div class="field"><label>Email</label><input id="email" type="email"></div>
-<div class="field"><label>Password</label><input id="password" type="password"></div>
+<div class="field"><label>Password</label><div style="position:relative"><input id="password" type="password" style="width:100%;padding-right:44px"><button type="button" onclick="togglePw('password',this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#666;padding:4px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
 <button class="btn" onclick="doRegister()">Create Account</button>
 <a class="link" href="/lite/login">Already have an account? Sign in</a>
 </div>
 <script>
+function togglePw(id, btn) {
+  var inp = document.getElementById(id);
+  var isPw = inp.type === 'password';
+  inp.type = isPw ? 'text' : 'password';
+  btn.innerHTML = isPw
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+}
 document.getElementById('password').addEventListener('keydown',function(e){if(e.key==='Enter')doRegister()});
 function doRegister(){
   var u=document.getElementById('username').value.trim();
