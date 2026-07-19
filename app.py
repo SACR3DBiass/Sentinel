@@ -2413,6 +2413,173 @@ async def analytics_emails(request: Request):
 
 
 # ============================================================================
+# SCHEDULED REPORTS API
+# ============================================================================
+@app.get("/api/v1/report-schedule")
+async def get_report_schedule(request: Request):
+    user = require_auth(request)
+    schedule = db.report_schedule_get(user["user_id"])
+    return schedule or {"enabled": False, "frequency": "monthly", "recipients": [], "last_sent": None}
+
+class ReportScheduleRequest(BaseModel):
+    enabled: bool = True
+    frequency: str = "monthly"
+    recipients: List[str] = []
+
+@app.post("/api/v1/report-schedule")
+async def save_report_schedule(payload: ReportScheduleRequest, request: Request):
+    user = require_auth(request)
+    result = db.report_schedule_save(user["user_id"], payload.frequency, payload.recipients, payload.enabled)
+    ip = _client_ip(request)
+    db.audit_log("report_schedule_updated", user["user_id"], user.get("username", ""), f"freq={payload.frequency} enabled={payload.enabled}", ip=ip)
+    return {"status": "success", "schedule": result}
+
+@app.post("/api/v1/report-schedule/test")
+async def test_report_schedule(request: Request):
+    user = require_auth(request)
+    user_db = resolve_user_db(user)
+    org_id = user_db.get("org_id") if user_db else None
+    report_data = _build_report_data(org_id)
+    org_name = user_db.get("username", "Organization") if user_db else "Organization"
+    pdf_bytes = generate_monthly_report_pdf(report_data, org_name=org_name)
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=sentinel-report.pdf"}
+    )
+
+def _build_report_data(org_id: str = None) -> dict:
+    from collections import Counter
+    now = datetime.utcnow()
+    period_start = (now - timedelta(days=30)).isoformat()
+    total = malicious = suspicious = safe = 0
+    targets = Counter()
+    senders = Counter()
+    sb = db.get_supabase()
+    if sb:
+        try:
+            r = sb.table("scan_results").select("*").gte("created_at", period_start).execute()
+            for row in (r.data or []):
+                total += 1
+                verdict = (row.get("verdict") or "").lower()
+                if "malicious" in verdict or "phishing" in verdict:
+                    malicious += 1
+                elif "suspicious" in verdict:
+                    suspicious += 1
+                else:
+                    safe += 1
+                if row.get("target"):
+                    targets[row["target"]] += 1
+                if row.get("sender") or row.get("from_address"):
+                    senders[row.get("sender") or row.get("from_address")] += 1
+        except Exception:
+            pass
+    return {
+        "total": total, "malicious": malicious, "suspicious": suspicious, "safe": safe,
+        "threats_blocked": malicious, "estimated_cost_prevented": malicious * settings.COST_PER_INCIDENT,
+        "feedback_count": 0, "false_positives": 0, "false_negatives": 0,
+        "unique_targets": len(targets), "top_targets": dict(targets.most_common(5)),
+        "top_senders": dict(senders.most_common(5)),
+        "period_start": period_start, "period_end": now.isoformat(),
+    }
+
+# ============================================================================
+# WHITE-LABEL / BRANDING API
+# ============================================================================
+@app.get("/api/v1/branding")
+async def get_branding(request: Request):
+    user = require_auth(request)
+    user_db = resolve_user_db(user)
+    org_id = user_db.get("org_id") if user_db else None
+    if not org_id:
+        return {"logo_url": "", "primary_color": "#DC2626", "secondary_color": "#7F1D1D", "org_display_name": ""}
+    return db.branding_get(org_id)
+
+class BrandingRequest(BaseModel):
+    logo_url: str = ""
+    primary_color: str = "#DC2626"
+    secondary_color: str = "#7F1D1D"
+    org_display_name: str = ""
+    custom_css: str = ""
+
+@app.post("/api/v1/branding")
+async def save_branding(payload: BrandingRequest, request: Request):
+    user = require_auth(request)
+    user_db = resolve_user_db(user)
+    if not user_db or user_db.get("role") not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Only admins can change branding")
+    org_id = user_db.get("org_id")
+    if not org_id:
+        raise HTTPException(status_code=400, detail="No organization")
+    result = db.branding_save(org_id, payload.model_dump())
+    ip = _client_ip(request)
+    db.audit_log("branding_updated", user["user_id"], user.get("username", ""), ip=ip)
+    return {"status": "success", "branding": result}
+
+@app.get("/api/v1/branding/{org_id}")
+async def get_branding_public(org_id: str):
+    return db.branding_get(org_id)
+
+# ============================================================================
+# CUSTOM DETECTION RULES API
+# ============================================================================
+@app.get("/api/v1/rules")
+async def list_rules(request: Request):
+    user = require_auth(request)
+    return {"rules": db.detection_rules_list(user["user_id"])}
+
+class RuleCreateRequest(BaseModel):
+    name: str
+    pattern: str
+    rule_type: str = "keyword"
+    action: str = "flag"
+    description: str = ""
+
+@app.post("/api/v1/rules")
+async def create_rule(payload: RuleCreateRequest, request: Request):
+    user = require_auth(request)
+    if not payload.name or not payload.pattern:
+        raise HTTPException(status_code=400, detail="Name and pattern required")
+    rule = db.detection_rule_create(user["user_id"], payload.name, payload.pattern,
+                                    payload.rule_type, payload.action, payload.description)
+    if not rule:
+        raise HTTPException(status_code=500, detail="Failed to create rule")
+    ip = _client_ip(request)
+    db.audit_log("rule_created", user["user_id"], user.get("username", ""), f"rule={payload.name}", ip=ip)
+    return {"status": "success", "rule": rule}
+
+@app.delete("/api/v1/rules/{rule_id}")
+async def delete_rule(rule_id: str, request: Request):
+    user = require_auth(request)
+    ok = db.detection_rule_delete(user["user_id"], rule_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    ip = _client_ip(request)
+    db.audit_log("rule_deleted", user["user_id"], user.get("username", ""), f"rule_id={rule_id}", ip=ip)
+    return {"status": "success"}
+
+@app.patch("/api/v1/rules/{rule_id}/toggle")
+async def toggle_rule(rule_id: str, request: Request):
+    user = require_auth(request)
+    body = await request.json()
+    enabled = body.get("enabled", True)
+    ok = db.detection_rule_toggle(user["user_id"], rule_id, enabled)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    return {"status": "success"}
+
+@app.post("/api/v1/rules/check")
+async def check_rules(request: Request):
+    """Check a text snippet against the user's rules (for preview)."""
+    user = require_auth(request)
+    body = await request.json()
+    text = body.get("text", "")
+    matches = db.detection_rules_check(text, user["user_id"])
+    return {"matches": [{"name": m["name"], "action": m["action"], "pattern": m["pattern"]} for m in matches]}
+
+
+# ============================================================================
 # PAGE ROUTES - HTML FRONTPAGES
 # ============================================================================
 @app.get("/login", response_class=HTMLResponse)
@@ -2461,6 +2628,10 @@ async def page_analytics(request: Request):
 @app.get("/", response_class=HTMLResponse)
 async def page_landing():
     return LANDING_PAGE
+
+@app.get("/demo", response_class=HTMLResponse)
+async def page_demo():
+    return DEMO_PAGE
 
 # ============================================================================
 # ANALYTICS PAGE (Owner Only)
@@ -4044,7 +4215,8 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             opts: function() { return { headers: {'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json'} }; },
             get: function(path) { return fetch(this.base + path, this.opts()).then(function(r) { if (r.status === 401) { logout(); throw new Error('Session expired'); } if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Request failed (' + r.status + ')'); }, function() { throw new Error('Request failed (' + r.status + ')'); }); return r.json(); }); },
             post: function(path, body) { return fetch(this.base + path, Object.assign({}, this.opts(), { method: 'POST', body: JSON.stringify(body) })).then(function(r) { if (r.status === 401) { logout(); throw new Error('Session expired'); } if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Request failed (' + r.status + ')'); }, function() { throw new Error('Request failed (' + r.status + ')'); }); return r.json(); }); },
-            del: function(path) { return fetch(this.base + path, Object.assign({}, this.opts(), { method: 'DELETE' })).then(function(r) { if (r.status === 401) { logout(); throw new Error('Session expired'); } if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Request failed (' + r.status + ')'); }, function() { throw new Error('Request failed (' + r.status + ')'); }); return r.json(); }); }
+            del: function(path) { return fetch(this.base + path, Object.assign({}, this.opts(), { method: 'DELETE' })).then(function(r) { if (r.status === 401) { logout(); throw new Error('Session expired'); } if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Request failed (' + r.status + ')'); }, function() { throw new Error('Request failed (' + r.status + ')'); }); return r.json(); }); },
+            patch: function(path, body) { return fetch(this.base + path, Object.assign({}, this.opts(), { method: 'PATCH', body: JSON.stringify(body) })).then(function(r) { if (r.status === 401) { logout(); throw new Error('Session expired'); } if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Request failed (' + r.status + ')'); }, function() { throw new Error('Request failed (' + r.status + ')'); }); return r.json(); }); }
         };
 
         function App() {
@@ -4075,6 +4247,23 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             var _scanningId = useState('');
             var scanningId = _scanningId[0], setScanningId = _scanningId[1];
 
+            var _schedule = useState({enabled:false, frequency:'monthly', recipients:[], last_sent:null});
+            var schedule = _schedule[0], setSchedule = _schedule[1];
+            var _schedLoading = useState(false);
+            var schedLoading = _schedLoading[0], setSchedLoading = _schedLoading[1];
+
+            var _branding = useState({logo_url:'', primary_color:'#DC2626', secondary_color:'#7F1D1D', org_display_name:''});
+            var branding = _branding[0], setBranding = _branding[1];
+
+            var _rules = useState([]);
+            var rules = _rules[0], setRules = _rules[1];
+            var _newRule = useState({name:'', pattern:'', rule_type:'keyword', action:'flag', description:''});
+            var newRule = _newRule[0], setNewRule = _newRule[1];
+            var _ruleTestText = useState('');
+            var ruleTestText = _ruleTestText[0], setRuleTestText = _ruleTestText[1];
+            var _ruleMatches = useState(null);
+            var ruleMatches = _ruleMatches[0], setRuleMatches = _ruleMatches[1];
+
             var showToast = function(type, msg) {
                 setToast({type:type, msg:msg});
                 setTimeout(function() { setToast(null); }, 3000);
@@ -4092,11 +4281,20 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             var fetchInvites = useCallback(function() {
                 API.get('/invites').then(function(r) { setInvites(r.invites || []); }).catch(function() {});
             }, []);
+            var fetchSchedule = useCallback(function() {
+                API.get('/report-schedule').then(function(r) { setSchedule(r); }).catch(function() {});
+            }, []);
+            var fetchBranding = useCallback(function() {
+                API.get('/branding').then(function(r) { setBranding(r); }).catch(function() {});
+            }, []);
+            var fetchRules = useCallback(function() {
+                API.get('/rules').then(function(r) { setRules(r.rules || []); }).catch(function() {});
+            }, []);
 
             useEffect(function() {
                 if (!getToken()) { window.location.href = '/login'; return; }
-                fetchConns(); fetchScans(); fetchTeam(); fetchInvites();
-            }, [fetchConns, fetchScans, fetchTeam, fetchInvites]);
+                fetchConns(); fetchScans(); fetchTeam(); fetchInvites(); fetchSchedule(); fetchBranding(); fetchRules();
+            }, [fetchConns, fetchScans, fetchTeam, fetchInvites, fetchSchedule, fetchBranding, fetchRules]);
 
             var btnBase = { padding:'8px 16px', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', border:'none', fontFamily:'Inter', transition:'all 0.2s' };
             var btnRed = Object.assign({}, btnBase, { background:'linear-gradient(135deg,#DC2626,#991B1B)', color:'#fff' });
@@ -4107,7 +4305,10 @@ SETTINGS_PAGE = """<!DOCTYPE html>
             var tabs = [
                 {id:'connections', label:'Email Connections'},
                 {id:'scans', label:'Scan History'},
-                {id:'team', label:'Team'}
+                {id:'team', label:'Team'},
+                {id:'reports', label:'Scheduled Reports'},
+                {id:'branding', label:'Branding'},
+                {id:'rules', label:'Detection Rules'}
             ];
 
             return React.createElement('div', { style:{minHeight:'100vh'} },
@@ -4189,7 +4390,7 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                                 )
                             );
                         })
-                    ) : React.createElement('div', null,
+                    ) : tab === 'team' ? React.createElement('div', null,
                         React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Team Members'),
                         React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Manage who has access to your organization.'),
 
@@ -4266,9 +4467,211 @@ SETTINGS_PAGE = """<!DOCTYPE html>
                                 );
                             })
                         )
-                    )
-                ),
-                showAdd ? React.createElement('div', { onClick:function() { setShowAdd(false); }, style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(4px)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:100,animation:'fadeIn 0.15s ease-out'} },
+                    ) : tab === 'reports' ? React.createElement('div', null,
+                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Scheduled Reports'),
+                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Automatically generate and email PDF threat reports on a schedule.'),
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16} },
+                                React.createElement('div', { style:{display:'flex',alignItems:'center',gap:10} },
+                                    React.createElement('div', { style:{width:36,height:36,borderRadius:8,background:schedule.enabled?'rgba(34,197,94,0.12)':'rgba(102,102,102,0.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16} }, schedule.enabled ? '\\u2713' : '\\u25CB'),
+                                    React.createElement('div', null,
+                                        React.createElement('div', { style:{fontSize:14,fontWeight:600} }, 'Report Schedule'),
+                                        React.createElement('div', { style:{fontSize:11,color:'#666',marginTop:2} }, schedule.last_sent ? 'Last sent: ' + new Date(schedule.last_sent).toLocaleDateString() : 'Never sent yet')
+                                    )
+                                ),
+                                React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
+                                    React.createElement('span', { style:{fontSize:12,color:'#888'} }, schedule.enabled ? 'Enabled' : 'Disabled'),
+                                    React.createElement('button', { onClick:function() {
+                                        var next = Object.assign({}, schedule, {enabled:!schedule.enabled});
+                                        setSchedLoading(true);
+                                        API.post('/report-schedule', next).then(function() { setSchedule(next); showToast('success', next.enabled ? 'Schedule enabled' : 'Schedule disabled'); }).catch(function(e) { showToast('error', e.message || 'Failed'); }).finally(function() { setSchedLoading(false); });
+                                    }, style:{width:44,height:24,borderRadius:12,background:schedule.enabled?'linear-gradient(135deg,#22C55E,#166534)':'#333',border:'none',cursor:'pointer',position:'relative',transition:'all 0.2s',opacity:schedLoading?0.6:1} },
+                                        React.createElement('div', { style:{width:18,height:18,borderRadius:'50%',background:'#fff',position:'absolute',top:3,left:schedule.enabled?23:3,transition:'all 0.2s'} })
+                                    )
+                                )
+                            ),
+                            React.createElement('div', { style:{marginBottom:16} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Frequency'),
+                                React.createElement('select', { value:schedule.frequency, onChange:function(e) { setSchedule(Object.assign({}, schedule, {frequency:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
+                                    React.createElement('option', { value:'weekly' }, 'Weekly'),
+                                    React.createElement('option', { value:'monthly' }, 'Monthly')
+                                )
+                            ),
+                            React.createElement('div', { style:{marginBottom:16} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Recipient Emails (comma separated)'),
+                                React.createElement('input', { value:(schedule.recipients||[]).join(', '), onChange:function(e) { setSchedule(Object.assign({}, schedule, {recipients:e.target.value.split(',').map(function(s){return s.trim();}).filter(Boolean)})); }, placeholder:'admin@company.com, ceo@company.com', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
+                            ),
+                            React.createElement('div', { style:{display:'flex',gap:8} },
+                                React.createElement('button', { onClick:function() {
+                                    setSchedLoading(true);
+                                    API.post('/report-schedule', schedule).then(function() { showToast('success', 'Schedule saved'); }).catch(function(e) { showToast('error', e.message || 'Failed'); }).finally(function() { setSchedLoading(false); });
+                                }, disabled:schedLoading, style:Object.assign({}, btnRed, {opacity:schedLoading?0.6:1}) }, schedLoading ? 'Saving...' : 'Save Schedule'),
+                                React.createElement('button', { onClick:function() {
+                                    window.open('/api/v1/report-schedule/test', '_blank');
+                                    showToast('success', 'Generating report PDF...');
+                                }, style:btnDark }, 'Download Test Report')
+                            )
+                        )
+                    ) : tab === 'branding' ? React.createElement('div', null,
+                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'White-Label Branding'),
+                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Customize the look and feel of your SENTINEL deployment with your own brand.'),
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{marginBottom:16} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Organization Display Name'),
+                                React.createElement('input', { value:branding.org_display_name||'', onChange:function(e) { setBranding(Object.assign({}, branding, {org_display_name:e.target.value})); }, placeholder:'Your Company Name', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
+                            ),
+                            React.createElement('div', { style:{marginBottom:16} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Logo URL'),
+                                React.createElement('input', { value:branding.logo_url||'', onChange:function(e) { setBranding(Object.assign({}, branding, {logo_url:e.target.value})); }, placeholder:'https://your-cdn.com/logo.png', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} }),
+                                React.createElement('div', { style:{fontSize:11,color:'#555',marginTop:4} }, 'Paste a URL to your logo image (PNG, SVG, or JPG recommended)')
+                            ),
+                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16} },
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Primary Color'),
+                                    React.createElement('div', { style:{display:'flex',gap:8,alignItems:'center'} },
+                                        React.createElement('input', { type:'color', value:branding.primary_color||'#DC2626', onChange:function(e) { setBranding(Object.assign({}, branding, {primary_color:e.target.value})); }, style:{width:40,height:36,border:'1px solid #222',borderRadius:6,cursor:'pointer',padding:2,background:'#0a0a0a'} }),
+                                        React.createElement('input', { value:branding.primary_color||'#DC2626', onChange:function(e) { setBranding(Object.assign({}, branding, {primary_color:e.target.value})); }, style:{flex:1,padding:'8px 12px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:12,fontFamily:'JetBrains Mono'} })
+                                    )
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Secondary Color'),
+                                    React.createElement('div', { style:{display:'flex',gap:8,alignItems:'center'} },
+                                        React.createElement('input', { type:'color', value:branding.secondary_color||'#7F1D1D', onChange:function(e) { setBranding(Object.assign({}, branding, {secondary_color:e.target.value})); }, style:{width:40,height:36,border:'1px solid #222',borderRadius:6,cursor:'pointer',padding:2,background:'#0a0a0a'} }),
+                                        React.createElement('input', { value:branding.secondary_color||'#7F1D1D', onChange:function(e) { setBranding(Object.assign({}, branding, {secondary_color:e.target.value})); }, style:{flex:1,padding:'8px 12px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:12,fontFamily:'JetBrains Mono'} })
+                                    )
+                                )
+                            ),
+                            React.createElement('div', { style:{marginBottom:16} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Custom CSS (Advanced)'),
+                                React.createElement('textarea', { value:branding.custom_css||'', onChange:function(e) { setBranding(Object.assign({}, branding, {custom_css:e.target.value})); }, placeholder:'.sentinel-logo { filter: brightness(1.5); }', rows:4, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:12,fontFamily:'JetBrains Mono',resize:'vertical'} })
+                            ),
+                            React.createElement('div', { style:{display:'flex',gap:8} },
+                                React.createElement('button', { onClick:function() {
+                                    API.post('/branding', branding).then(function() { showToast('success', 'Branding saved'); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                                }, style:btnRed }, 'Save Branding'),
+                                React.createElement('button', { onClick:function() { setBranding({logo_url:'', primary_color:'#DC2626', secondary_color:'#7F1D1D', org_display_name:'', custom_css:''}); }, style:btnDark }, 'Reset to Default')
+                            )
+                        ),
+                        branding.logo_url ? React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:12} }, 'Preview'),
+                            React.createElement('div', { style:{background:'#0a0a0a',border:'1px solid #222',borderRadius:12,padding:20} },
+                                React.createElement('div', { style:{display:'flex',alignItems:'center',gap:12,marginBottom:16} },
+                                    React.createElement('img', { src:branding.logo_url, alt:'Logo', style:{height:32,objectFit:'contain'}, onError:function(e) { e.target.style.display='none'; } }),
+                                    React.createElement('span', { style:{fontSize:16,fontWeight:800,color:branding.primary_color||'#DC2626'} }, branding.org_display_name || 'Your Company'),
+                                    React.createElement('span', { style:{fontSize:11,color:'#666',background:'#161616',padding:'2px 8px',borderRadius:4} }, 'SENTINEL Powered')
+                                ),
+                                React.createElement('div', { style:{display:'flex',gap:8} },
+                                    React.createElement('div', { style:{background:branding.primary_color||'#DC2626',padding:'6px 14px',borderRadius:6,fontSize:12,fontWeight:600,color:'#fff'} }, 'Primary'),
+                                    React.createElement('div', { style:{background:branding.secondary_color||'#7F1D1D',padding:'6px 14px',borderRadius:6,fontSize:12,fontWeight:600,color:'#fff'} }, 'Secondary')
+                                )
+                            )
+                        ) : null
+                    ) : tab === 'rules' ? React.createElement('div', null,
+                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Custom Detection Rules'),
+                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Define your own patterns to flag, whitelist, or block specific content in scanned emails.'),
+
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:16} }, 'Create New Rule'),
+                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12} },
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Rule Name'),
+                                    React.createElement('input', { value:newRule.name, onChange:function(e) { setNewRule(Object.assign({}, newRule, {name:e.target.value})); }, placeholder:'e.g. Block competitor domains', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Pattern'),
+                                    React.createElement('input', { value:newRule.pattern, onChange:function(e) { setNewRule(Object.assign({}, newRule, {pattern:e.target.value})); }, placeholder:'e.g. evil-domain\\.com or urgent wire transfer', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'JetBrains Mono'} })
+                                )
+                            ),
+                            React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12} },
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Type'),
+                                    React.createElement('select', { value:newRule.rule_type, onChange:function(e) { setNewRule(Object.assign({}, newRule, {rule_type:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
+                                        React.createElement('option', { value:'keyword' }, 'Keyword (substring match)'),
+                                        React.createElement('option', { value:'regex' }, 'Regex (pattern match)'),
+                                        React.createElement('option', { value:'domain' }, 'Domain (partial match)')
+                                    )
+                                ),
+                                React.createElement('div', null,
+                                    React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Action'),
+                                    React.createElement('select', { value:newRule.action, onChange:function(e) { setNewRule(Object.assign({}, newRule, {action:e.target.value})); }, style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter',cursor:'pointer'} },
+                                        React.createElement('option', { value:'flag' }, 'Flag (mark as suspicious)'),
+                                        React.createElement('option', { value:'whitelist' }, 'Whitelist (mark as safe)'),
+                                        React.createElement('option', { value:'block' }, 'Block (mark as malicious)')
+                                    )
+                                )
+                            ),
+                            React.createElement('div', { style:{marginBottom:16} },
+                                React.createElement('label', { style:{fontSize:11,fontWeight:600,color:'#666',textTransform:'uppercase',letterSpacing:'0.05em',display:'block',marginBottom:6} }, 'Description (optional)'),
+                                React.createElement('input', { value:newRule.description, onChange:function(e) { setNewRule(Object.assign({}, newRule, {description:e.target.value})); }, placeholder:'Why this rule matters...', style:{width:'100%',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} })
+                            ),
+                            React.createElement('button', { onClick:function() {
+                                if (!newRule.name || !newRule.pattern) { showToast('error', 'Name and pattern are required'); return; }
+                                API.post('/rules', newRule).then(function() { showToast('success', 'Rule created'); setNewRule({name:'', pattern:'', rule_type:'keyword', action:'flag', description:''}); fetchRules(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                            }, style:btnRed }, '+ Create Rule')
+                        ),
+
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:12} }, 'Test Rules'),
+                            React.createElement('div', { style:{display:'flex',gap:8,marginBottom:12} },
+                                React.createElement('input', { value:ruleTestText, onChange:function(e) { setRuleTestText(e.target.value); }, placeholder:'Paste email text to test against your rules...', style:{flex:1,padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,color:'#f5f5f5',fontSize:13,fontFamily:'Inter'} }),
+                                React.createElement('button', { onClick:function() {
+                                    API.post('/rules/check', {text:ruleTestText}).then(function(r) { setRuleMatches(r.matches || []); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                                }, style:btnDark }, 'Test')
+                            ),
+                            ruleMatches !== null ? React.createElement('div', null,
+                                ruleMatches.length === 0 ? React.createElement('div', { style:{fontSize:13,color:'#888',padding:'12px',background:'#0a0a0a',borderRadius:8,textAlign:'center'} }, 'No rules matched this text.') :
+                                ruleMatches.map(function(m, i) {
+                                    var actionColors = {flag:'#EAB308',whitelist:'#22C55E',block:'#EF4444'};
+                                    return React.createElement('div', { key:i, style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 14px',background:'#0a0a0a',border:'1px solid #222',borderRadius:8,marginBottom:6} },
+                                        React.createElement('div', null,
+                                            React.createElement('span', { style:{fontSize:13,fontWeight:600} }, m.name),
+                                            React.createElement('span', { style:{fontSize:11,color:'#666',marginLeft:8} }, 'Pattern: ' + m.pattern)
+                                        ),
+                                        React.createElement('span', { style:{fontSize:11,fontWeight:700,color:actionColors[m.action]||'#888',textTransform:'uppercase'} }, m.action)
+                                    );
+                                })
+                            ) : null
+                        ),
+
+                        React.createElement('div', { style:cardStyle },
+                            React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16} },
+                                React.createElement('div', { style:{fontSize:14,fontWeight:600} }, 'Active Rules (' + rules.length + ')')
+                            ),
+                            rules.length === 0 ? React.createElement('div', { style:{textAlign:'center',padding:'40px 0',color:'#666',fontSize:14} }, 'No custom rules yet. Create one above to get started.') :
+                            rules.map(function(r) {
+                                var actionColors = {flag:'#EAB308',whitelist:'#22C55E',block:'#EF4444'};
+                                var actionBgs = {flag:'rgba(234,179,8,0.12)',whitelist:'rgba(34,197,94,0.12)',block:'rgba(220,38,38,0.12)'};
+                                return React.createElement('div', { key:r.id, style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 16px',background:'#0a0a0a',border:'1px solid #222',borderRadius:10,marginBottom:8,opacity:r.enabled?1:0.5} },
+                                    React.createElement('div', { style:{flex:1} },
+                                        React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8,marginBottom:4} },
+                                            React.createElement('span', { style:{fontSize:14,fontWeight:600} }, r.name),
+                                            React.createElement('span', { style:{fontSize:10,fontWeight:700,color:actionColors[r.action],background:actionBgs[r.action],padding:'2px 8px',borderRadius:4,textTransform:'uppercase'} }, r.action),
+                                            React.createElement('span', { style:{fontSize:10,color:'#888',background:'#161616',padding:'2px 6px',borderRadius:4} }, r.rule_type)
+                                        ),
+                                        React.createElement('div', { style:{fontSize:12,color:'#888',fontFamily:'JetBrains Mono',marginBottom:2} }, r.pattern),
+                                        r.description ? React.createElement('div', { style:{fontSize:11,color:'#555'} }, r.description) : null
+                                    ),
+                                    React.createElement('div', { style:{display:'flex',gap:6,alignItems:'center'} },
+                                        React.createElement('button', { onClick:function() {
+                                            API.patch('/rules/' + r.id + '/toggle', {enabled:!r.enabled}).then(function() { fetchRules(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                                        }, style:{width:36,height:20,borderRadius:10,background:r.enabled?'linear-gradient(135deg,#22C55E,#166534)':'#333',border:'none',cursor:'pointer',position:'relative',transition:'all 0.2s'} },
+                                            React.createElement('div', { style:{width:16,height:16,borderRadius:'50%',background:'#fff',position:'absolute',top:2,left:r.enabled?18:2,transition:'all 0.2s'} })
+                                        ),
+                                        React.createElement('button', { onClick:function() {
+                                            if (!confirm('Delete rule "' + r.name + '"?')) return;
+                                            API.del('/rules/' + r.id).then(function() { showToast('success', 'Rule deleted'); fetchRules(); }).catch(function(e) { showToast('error', e.message || 'Failed'); });
+                                        }, style:{background:'rgba(220,38,38,0.08)',border:'1px solid rgba(220,38,38,0.2)',color:'#FCA5A5',padding:'4px 10px',borderRadius:6,fontSize:11,cursor:'pointer',fontFamily:'Inter'} }, 'Delete')
+                                    )
+                                );
+                            })
+                        )
+                    ) : React.createElement('div', null,
+                        React.createElement('h2', { style:{fontSize:20,fontWeight:700,marginBottom:8} }, 'Team Members'),
+                        React.createElement('p', { style:{fontSize:13,color:'#666',marginBottom:24} }, 'Manage who has access to your organization.'),
+
+                        React.createElement('div', { style:Object.assign({}, cardStyle, {marginBottom:24}) },
+                            React.createElement('div', { style:{fontSize:14,fontWeight:600,marginBottom:12} }, 'Invite Member'),
+                            React.createElement('div', { style:{display:'flex',gap:8,flexWrap:'wrap'} },
                     React.createElement('div', { className:'anim-modal s-modal', onClick:function(e) { e.stopPropagation(); }, style:{background:'#161616',border:'1px solid #1a1a1a',borderRadius:16,width:'100%',maxWidth:480,padding:28} },
                         React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20} },
                             React.createElement('div', { style:{fontSize:18,fontWeight:700} }, 'Add Email Connection'),
@@ -5117,6 +5520,343 @@ INVITE_ACCEPT_PAGE = """<!DOCTYPE html>
                 document.getElementById('login-btn').textContent = 'Log In & Accept Invite';
             });
         }
+    </script>
+</body>
+</html>"""
+
+# ============================================================================
+# INTERACTIVE DEMO PAGE
+# ============================================================================
+DEMO_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENTINEL - Interactive Demo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #f5f5f5; min-height: 100vh; }
+        .topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 12px 32px; display: flex; justify-content: space-between; align-items: center; background: rgba(10,10,10,0.95); backdrop-filter: blur(20px); border-bottom: 1px solid #1a1a1a; }
+        .logo { display: flex; align-items: center; gap: 8px; text-decoration: none; color: #f5f5f5; }
+        .logo svg { width: 28px; height: 28px; }
+        .logo-text { font-weight: 800; font-size: 16px; letter-spacing: -0.02em; }
+        .topbar-right { display: flex; align-items: center; gap: 10px; }
+        .btn { padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; font-family: 'Inter'; transition: all 0.2s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-ghost { background: transparent; border: 1px solid #333; color: #aaa; }
+        .btn-ghost:hover { border-color: #555; background: #161616; color: #f5f5f5; }
+        .btn-red { background: linear-gradient(135deg, #DC2626, #991B1B); color: #fff; border: 1px solid rgba(220,38,38,0.4); }
+        .btn-red:hover { box-shadow: 0 4px 20px rgba(220,38,38,0.35); transform: translateY(-1px); }
+        .demo-badge { background: rgba(220,38,38,0.1); color: #EF4444; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid rgba(220,38,38,0.2); }
+        .main { padding: 80px 32px 40px; max-width: 1200px; margin: 0 auto; }
+        .page-header { text-align: center; margin-bottom: 32px; }
+        .page-header h1 { font-size: 32px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 8px; }
+        .page-header h1 span { background: linear-gradient(135deg, #DC2626, #F87171); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .page-header p { color: #888; font-size: 15px; }
+        .dashboard-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+        .stat-card { background: #111; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px 18px; }
+        .stat-card .label { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .stat-card .value { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; font-family: 'JetBrains Mono', monospace; }
+        .stat-card .value.red { color: #DC2626; }
+        .stat-card .value.yellow { color: #EAB308; }
+        .stat-card .value.green { color: #22C55E; }
+        .stat-card .value.blue { color: #3B82F6; }
+        .section-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .section-title .dot { width: 8px; height: 8px; border-radius: 50%; background: #22C55E; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .email-table { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+        .email-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .email-table th { text-align: left; padding: 12px 16px; background: #0d0d0d; color: #888; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; border-bottom: 1px solid #1e1e1e; }
+        .email-table td { padding: 12px 16px; border-bottom: 1px solid #1a1a1a; }
+        .email-table tr:hover td { background: rgba(255,255,255,0.02); }
+        .verdict-tag { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+        .verdict-tag.malicious { background: rgba(220,38,38,0.12); color: #FCA5A5; border: 1px solid rgba(220,38,38,0.25); }
+        .verdict-tag.suspicious { background: rgba(234,179,8,0.12); color: #FDE047; border: 1px solid rgba(234,179,8,0.25); }
+        .verdict-tag.safe { background: rgba(34,197,94,0.12); color: #86EFAC; border: 1px solid rgba(34,197,94,0.25); }
+        .scan-panel { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+        .scan-panel h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+        .scan-input { width: 100%; padding: 14px 16px; background: #0a0a0a; border: 1px solid #222; border-radius: 8px; color: #f5f5f5; font-size: 13px; font-family: 'JetBrains Mono', monospace; resize: vertical; min-height: 120px; outline: none; transition: border-color 0.2s; }
+        .scan-input:focus { border-color: #DC2626; box-shadow: 0 0 0 2px rgba(220,38,38,0.15); }
+        .scan-result { margin-top: 16px; background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px; display: none; }
+        .scan-result.show { display: block; animation: fadeUp 0.3s ease-out; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .confidence-ring { width: 120px; height: 120px; margin: 0 auto 12px; position: relative; }
+        .confidence-ring svg { transform: rotate(-90deg); }
+        .confidence-score { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 900; font-family: 'JetBrains Mono', monospace; }
+        .indicator { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #111; border: 1px solid #1a1a1a; border-radius: 6px; margin-bottom: 6px; font-size: 13px; color: #aaa; }
+        .indicator .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+        .indicator .dot.red { background: #EF4444; }
+        .indicator .dot.yellow { background: #EAB308; }
+        .indicator .dot.green { background: #22C55E; }
+        .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; }
+        .feature-card { background: #111; border: 1px solid #1e1e1e; border-radius: 12px; padding: 20px; transition: all 0.2s; }
+        .feature-card:hover { border-color: rgba(220,38,38,0.3); transform: translateY(-2px); }
+        .feature-card .icon { font-size: 24px; margin-bottom: 10px; }
+        .feature-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 6px; }
+        .feature-card p { font-size: 12px; color: #888; line-height: 1.5; }
+        .cta-bar { text-align: center; padding: 48px; background: linear-gradient(135deg, rgba(220,38,38,0.08), rgba(127,29,29,0.08)); border: 1px solid rgba(220,38,38,0.2); border-radius: 16px; margin-bottom: 32px; }
+        .cta-bar h2 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+        .cta-bar p { color: #888; margin-bottom: 20px; font-size: 15px; }
+        .cta-bar .btn-red { padding: 14px 36px; font-size: 15px; }
+        .spinner { width: 18px; height: 18px; border: 2px solid rgba(220,38,38,0.3); border-top-color: #DC2626; border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .topbar-nav { display: flex; gap: 6px; }
+        .topbar-nav a { padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 500; color: #888; transition: all 0.2s; text-decoration: none; }
+        .topbar-nav a:hover { color: #f5f5f5; background: rgba(255,255,255,0.05); }
+        @media (max-width: 768px) {
+            .main { padding: 72px 12px 12px; }
+            .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+            .features-grid { grid-template-columns: 1fr; }
+            .topbar-nav { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <a href="/" class="logo">
+            <svg viewBox="0 0 36 36" fill="none"><path d="M18 2L3 10v16l15 8 15-8V10L18 2z" fill="url(#g1)" opacity="0.9"/><path d="M18 6l10 5.5v11L18 28 8 22.5v-11L18 6z" fill="#0a0a0a"/><path d="M18 12l-6 3.3v6.6L18 25l6-3.1v-6.6L18 12z" fill="url(#g2)"/><defs><linearGradient id="g1" x1="3" y1="2" x2="33" y2="34"><stop stop-color="#DC2626"/><stop offset="1" stop-color="#991B1B"/></linearGradient><linearGradient id="g2" x1="12" y1="12" x2="24" y2="25"><stop stop-color="#DC2626"/><stop offset="1" stop-color="#991B1B"/></linearGradient></defs></svg>
+            <span class="logo-text">SENTINEL</span>
+            <span class="demo-badge">Interactive Demo</span>
+        </a>
+        <div style="display:flex;align-items:center;gap:10px">
+            <div class="topbar-nav">
+                <a href="/marketing">Overview</a>
+                <a href="/docs">Docs</a>
+                <a href="/lite">SENTINEL Lite</a>
+            </div>
+            <a href="/login" class="btn btn-ghost">Log In</a>
+            <a href="/register" class="btn btn-red">Get Started</a>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="page-header">
+            <h1>See <span>SENTINEL</span> in Action</h1>
+            <p>Explore a live preview of the dashboard, scan emails in real-time, and see how phishing detection works.</p>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="stat-card"><div class="label">Emails Scanned</div><div class="value" id="d-scanned">0</div></div>
+            <div class="stat-card"><div class="label">Threats Detected</div><div class="value red" id="d-threats">0</div></div>
+            <div class="stat-card"><div class="label">Suspicious</div><div class="value yellow" id="d-suspicious">0</div></div>
+            <div class="stat-card"><div class="label">Safe</div><div class="value green" id="d-safe">0</div></div>
+        </div>
+
+        <div class="scan-panel">
+            <h3>Try the AI Scanner</h3>
+            <p style="color:#888;font-size:13px;margin-bottom:12px">Paste any email content below to see SENTINEL analyze it for phishing indicators.</p>
+            <textarea class="scan-input" id="scanInput" placeholder="Paste email headers, body text, or a suspicious link here...">From: support@paypa1-secure.com
+To: user@company.com
+Subject: URGENT: Your account has been limited
+
+Dear Customer,
+
+We have detected unusual activity on your PayPal account. Your account access has been temporarily limited.
+
+Please verify your identity within 24 hours by clicking the link below:
+https://paypa1-secure.com/verify?id=837291
+
+If you do not verify, your account will be permanently suspended.
+
+Thank you,
+PayPal Security Team</textarea>
+            <div style="display:flex;gap:8px;margin-top:12px">
+                <button class="btn btn-red" id="scanBtn" onclick="runScan()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2L3 7v13a1 1 0 001 1h16a1 1 0 001-1V7l-6-5z"/><path d="M9 2v6h6V2"/></svg>
+                    Scan Now
+                </button>
+                <button class="btn btn-ghost" onclick="loadSample('phishing')">Load Phishing Sample</button>
+                <button class="btn btn-ghost" onclick="loadSample('legit')">Load Legitimate Sample</button>
+                <button class="btn btn-ghost" onclick="loadSample('suspicious')">Load Suspicious Sample</button>
+            </div>
+            <div class="scan-result" id="scanResult">
+                <div style="display:grid;grid-template-columns:160px 1fr;gap:20px;align-items:start">
+                    <div>
+                        <div class="confidence-ring" id="confRing"></div>
+                        <div id="verdictTag" style="text-align:center;margin-bottom:8px"></div>
+                        <div id="verdictText" style="text-align:center;font-size:12px;color:#888"></div>
+                    </div>
+                    <div>
+                        <div style="font-size:14px;font-weight:700;margin-bottom:12px">Analysis Breakdown</div>
+                        <div id="indicators"></div>
+                        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #1a1a1a">
+                            <div style="font-size:12px;font-weight:600;color:#888;margin-bottom:4px">AI Reasoning</div>
+                            <div id="reasoning" style="font-size:12px;color:#aaa;line-height:1.6"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title"><span class="dot"></span>Live Threat Feed (Demo Data)</div>
+        <div class="email-table">
+            <table>
+                <thead><tr><th>From</th><th>Subject</th><th>Date</th><th>Verdict</th><th>Confidence</th></tr></thead>
+                <tbody id="feedBody"></tbody>
+            </table>
+        </div>
+
+        <div class="section-title" style="margin-top:32px">Why SENTINEL?</div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">&#x1F9E0;</div>
+                <h4>AI-Powered Analysis</h4>
+                <p>Advanced language models analyze email content, headers, and links for sophisticated phishing indicators.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#x26A1;</div>
+                <h4>Real-Time Scanning</h4>
+                <p>Automatically monitors your inbox via IMAP and alerts you instantly when threats are detected.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#x1F6E1;</div>
+                <h4>Confidence Scoring</h4>
+                <p>Every scan includes a detailed confidence score and breakdown of exactly why something was flagged.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#x1F4CA;</div>
+                <h4>Analytics Dashboard</h4>
+                <p>Track threat trends, top attackers, and scan history with a beautiful, real-time analytics dashboard.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#x1F465;</div>
+                <h4>Team Management</h4>
+                <p>Invite team members with different access levels. Share threat intelligence across your organization.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">&#x1F4F1;</div>
+                <h4>SENTINEL Lite</h4>
+                <p>A simplified version for individuals. Use your own API key for quick phishing checks without setup.</p>
+            </div>
+        </div>
+
+        <div class="cta-bar">
+            <h2>Ready to protect your inbox?</h2>
+            <p>Get started in 60 seconds. Connect your email and let SENTINEL do the rest.</p>
+            <a href="/register" class="btn btn-red">Create Free Account</a>
+        </div>
+    </div>
+
+    <script>
+        var demoEmails = [
+            {from:'billing@amazon-verify.com', subject:'Action Required: Payment Failed', date:'2025-07-18', verdict:'malicious', confidence:97},
+            {from:'hr@company-inc.co', subject:'Updated PTO Policy - Please Review', date:'2025-07-18', verdict:'suspicious', confidence:72},
+            {from:'newsletter@stripe.com', subject:'Your July Invoice is Ready', date:'2025-07-17', verdict:'safe', confidence:99},
+            {from:'admin@microsoft-365-security.com', subject:'Your password expires today', date:'2025-07-17', verdict:'malicious', confidence:94},
+            {from:'jane.doe@company.com', subject:'Q3 Report Draft', date:'2025-07-16', verdict:'safe', confidence:98},
+            {from:'support@fedex-delivery-notice.com', subject:'Undeliverable Package #FX98271', date:'2025-07-16', verdict:'malicious', confidence:91},
+            {from:'it@company.com', subject:'Scheduled Maintenance Tonight', date:'2025-07-15', verdict:'safe', confidence:96},
+            {from:'alert@bankofamerica-security.net', subject:'Suspicious Login Detected', date:'2025-07-15', verdict:'malicious', confidence:89},
+        ];
+
+        function renderFeed() {
+            var body = document.getElementById('feedBody');
+            body.innerHTML = demoEmails.map(function(e) {
+                var vc = {malicious:'malicious', suspicious:'suspicious', safe:'safe'};
+                return '<tr><td style="font-family:JetBrains Mono,monospace;font-size:12px">' + e.from + '</td>' +
+                    '<td>' + e.subject + '</td><td style="color:#666;font-size:12px">' + e.date + '</td>' +
+                    '<td><span class="verdict-tag ' + vc[e.verdict] + '">' + e.verdict + '</span></td>' +
+                    '<td style="font-family:JetBrains Mono,monospace;font-size:12px">' + e.confidence + '%</td></tr>';
+            }).join('');
+        }
+
+        function animateCounter(id, target, color) {
+            var el = document.getElementById(id);
+            var current = 0;
+            var step = Math.max(1, Math.floor(target / 40));
+            var iv = setInterval(function() {
+                current = Math.min(current + step, target);
+                el.textContent = current.toLocaleString();
+                if (current >= target) clearInterval(iv);
+            }, 30);
+        }
+
+        var scanResults = {
+            phishing: {
+                confidence: 96, verdict: 'MALICIOUS', color: '#DC2626',
+                indicators: [
+                    {text: 'Domain spoofing: paypa1-secure.com mimics paypal.com', color: '#EF4444'},
+                    {text: 'Urgency language: "within 24 hours", "permanently suspended"', color: '#EF4444'},
+                    {text: 'Suspicious link: https://paypa1-secure.com/verify?id=837291', color: '#EF4444'},
+                    {text: 'Generic greeting: "Dear Customer" instead of your name', color: '#EAB308'},
+                    {text: 'Impersonation of known brand (PayPal)', color: '#EF4444'},
+                ],
+                reasoning: 'This email exhibits multiple classic phishing characteristics. The sending domain paypa1-secure.com uses a homoglyph (number 1 replacing letter l) to impersonate PayPal. The message creates artificial urgency and threatens account suspension to pressure immediate action without verification. The verification link points to the spoofed domain, not paypal.com.'
+            },
+            legit: {
+                confidence: 99, verdict: 'SAFE', color: '#22C55E',
+                indicators: [
+                    {text: 'Known sender domain: stripe.com', color: '#22C55E'},
+                    {text: 'No urgency or threat language detected', color: '#22C55E'},
+                    {text: 'Standard business communication pattern', color: '#22C55E'},
+                    {text: 'No suspicious links or attachments', color: '#22C55E'},
+                ],
+                reasoning: 'This email is from a verified legitimate sender domain (stripe.com) and contains standard invoice notification content. The language is professional and non-urgent, with no pressure tactics or suspicious links. The formatting is consistent with legitimate Stripe communications.'
+            },
+            suspicious: {
+                confidence: 74, verdict: 'SUSPICIOUS', color: '#EAB308',
+                indicators: [
+                    {text: 'External domain: company-inc.co (not your company domain)', color: '#EAB308'},
+                    {text: 'HR policy topics used as social engineering vector', color: '#EAB308'},
+                    {text: 'No direct threat, but requests review action', color: '#EAB308'},
+                    {text: 'Passes basic legitimacy checks', color: '#22C55E'},
+                ],
+                reasoning: 'This email uses a domain similar to your company but is not from your actual company domain. While the content appears professional and non-threatening, HR policy updates are commonly used in targeted phishing campaigns. We recommend verifying with your HR department before clicking any links.'
+            }
+        };
+
+        function loadSample(type) {
+            var samples = {
+                phishing: 'From: support@paypa1-secure.com\\nTo: user@company.com\\nSubject: URGENT: Your account has been limited\\n\\nDear Customer,\\n\\nWe have detected unusual activity on your PayPal account. Your account access has been temporarily limited.\\n\\nPlease verify your identity within 24 hours by clicking the link below:\\nhttps://paypa1-secure.com/verify?id=837291\\n\\nIf you do not verify, your account will be permanently suspended.\\n\\nThank you,\\nPayPal Security Team',
+                legit: 'From: newsletter@stripe.com\\nTo: billing@company.com\\nSubject: Your July Invoice is Ready\\n\\nHi,\\n\\nYour latest Stripe invoice for July 2025 is now available.\\n\\nAmount due: $249.00\\nDue date: August 1, 2025\\n\\nYou can view and download your invoice from your Stripe Dashboard.\\n\\nIf you have any questions, reply to this email or visit our support center.\\n\\nBest,\\nThe Stripe Team',
+                suspicious: 'From: hr@company-inc.co\\nTo: all-staff@company.com\\nSubject: Updated PTO Policy - Please Review\\n\\nDear Team,\\n\\nWe have updated our PTO policy effective August 1st. Please review the changes at your earliest convenience.\\n\\nKey changes include:\\n- Increased carryover limit\\n- New mental health days\\n- Updated request process\\n\\nPlease acknowledge receipt by end of week.\\n\\nBest regards,\\nHuman Resources'
+            };
+            document.getElementById('scanInput').value = samples[type].replace(/\\n/g, '\\n');
+            document.getElementById('scanResult').className = 'scan-result';
+        }
+
+        function runScan() {
+            var text = document.getElementById('scanInput').value;
+            if (!text.trim()) return;
+            var btn = document.getElementById('scanBtn');
+            btn.innerHTML = '<span class="spinner"></span> Analyzing...';
+            btn.disabled = true;
+
+            setTimeout(function() {
+                var type = 'suspicious';
+                if (text.indexOf('paypal') !== -1 || text.indexOf('paypa1') !== -1 || text.indexOf('verify your') !== -1 || text.indexOf('URGENT') !== -1) type = 'phishing';
+                else if (text.indexOf('stripe') !== -1 || text.indexOf('invoice') !== -1) type = 'legit';
+
+                var r = scanResults[type];
+                var result = document.getElementById('scanResult');
+                result.className = 'scan-result show';
+
+                document.getElementById('confRing').innerHTML =
+                    '<svg width="120" height="120" viewBox="0 0 120 120">' +
+                    '<circle cx="60" cy="60" r="52" fill="none" stroke="#1e1e1e" stroke-width="8"/>' +
+                    '<circle cx="60" cy="60" r="52" fill="none" stroke="' + r.color + '" stroke-width="8" stroke-linecap="round" stroke-dasharray="' + (r.confidence * 3.27) + ' 999" style="transition:stroke-dasharray 1s ease-out"/>' +
+                    '</svg>' +
+                    '<div class="confidence-score" style="color:' + r.color + '">' + r.confidence + '</div>';
+
+                document.getElementById('verdictTag').innerHTML = '<span class="verdict-tag ' + type + '" style="font-size:13px;padding:6px 16px">' + r.verdict + '</span>';
+                document.getElementById('verdictText').textContent = r.confidence + '% confidence';
+
+                document.getElementById('indicators').innerHTML = r.indicators.map(function(ind) {
+                    return '<div class="indicator"><span class="dot" style="background:' + ind.color + '"></span>' + ind.text + '</div>';
+                }).join('');
+
+                document.getElementById('reasoning').textContent = r.reasoning;
+
+                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2L3 7v13a1 1 0 001 1h16a1 1 0 001-1V7l-6-5z"/><path d="M9 2v6h6V2"/></svg> Scan Now';
+                btn.disabled = false;
+            }, 1200);
+        }
+
+        animateCounter('d-scanned', 2847);
+        animateCounter('d-threats', 312);
+        animateCounter('d-suspicious', 156);
+        animateCounter('d-safe', 2379);
+        renderFeed();
     </script>
 </body>
 </html>"""

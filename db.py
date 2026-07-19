@@ -2200,3 +2200,231 @@ def user_groq_key_get(user_id: str) -> str:
             return data.get("api_key", "")
     except Exception:
         return ""
+
+# ============================================================================
+# SCHEDULED REPORTS
+# ============================================================================
+
+def report_schedule_get(user_id: str) -> Optional[dict]:
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("report_schedules").select("*").eq("user_id", user_id).execute()
+            if r.data:
+                return r.data[0]
+        except Exception:
+            pass
+    path = os.path.join(DATA_DIR, user_id, "report_schedule.json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def report_schedule_save(user_id: str, frequency: str, recipients: List[str], enabled: bool = True) -> dict:
+    entry = {"user_id": user_id, "frequency": frequency, "recipients": recipients,
+             "enabled": enabled, "last_sent": None,
+             "updated_at": datetime.utcnow().isoformat()}
+    sb = get_supabase()
+    if sb:
+        try:
+            existing = sb.table("report_schedules").select("id").eq("user_id", user_id).execute()
+            if existing.data:
+                sb.table("report_schedules").update(entry).eq("user_id", user_id).execute()
+            else:
+                entry["id"] = str(uuid.uuid4())
+                sb.table("report_schedules").insert(entry).execute()
+            return entry
+        except Exception as e:
+            print(f"[SENTINEL] report_schedule_save (Supabase) failed: {e}", flush=True)
+    user_dir = os.path.join(DATA_DIR, user_id)
+    os.makedirs(user_dir, exist_ok=True)
+    with open(os.path.join(user_dir, "report_schedule.json"), "w") as f:
+        json.dump(entry, f)
+    return entry
+
+def report_schedules_due() -> List[dict]:
+    """Return all enabled schedules that are due for sending."""
+    now = datetime.utcnow()
+    due = []
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("report_schedules").select("*").eq("enabled", True).execute()
+            for s in (r.data or []):
+                last = s.get("last_sent")
+                freq = s.get("frequency", "monthly")
+                if not last:
+                    due.append(s)
+                    continue
+                last_dt = datetime.fromisoformat(last.replace("Z", "+00:00")).replace(tzinfo=None)
+                delta = (now - last_dt).total_seconds()
+                if (freq == "weekly" and delta >= 604800) or (freq == "monthly" and delta >= 2592000):
+                    due.append(s)
+        except Exception:
+            pass
+    return due
+
+def report_schedule_mark_sent(user_id: str):
+    now = datetime.utcnow().isoformat()
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("report_schedules").update({"last_sent": now}).eq("user_id", user_id).execute()
+        except Exception:
+            pass
+
+# ============================================================================
+# WHITE-LABEL / BRANDING
+# ============================================================================
+
+def branding_get(org_id: str) -> dict:
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("org_branding").select("*").eq("org_id", org_id).execute()
+            if r.data:
+                return r.data[0]
+        except Exception:
+            pass
+    path = os.path.join(DATA_DIR, "branding_%s.json" % org_id)
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def branding_save(org_id: str, data: dict) -> dict:
+    entry = {"org_id": org_id, "logo_url": data.get("logo_url", ""),
+             "primary_color": data.get("primary_color", "#DC2626"),
+             "secondary_color": data.get("secondary_color", "#7F1D1D"),
+             "org_display_name": data.get("org_display_name", ""),
+             "custom_css": data.get("custom_css", ""),
+             "updated_at": datetime.utcnow().isoformat()}
+    sb = get_supabase()
+    if sb:
+        try:
+            existing = sb.table("org_branding").select("org_id").eq("org_id", org_id).execute()
+            if existing.data:
+                sb.table("org_branding").update(entry).eq("org_id", org_id).execute()
+            else:
+                sb.table("org_branding").insert(entry).execute()
+            return entry
+        except Exception as e:
+            print(f"[SENTINEL] branding_save (Supabase) failed: {e}", flush=True)
+    path = os.path.join(DATA_DIR, "branding_%s.json" % org_id)
+    with open(path, "w") as f:
+        json.dump(entry, f)
+    return entry
+
+# ============================================================================
+# CUSTOM DETECTION RULES
+# ============================================================================
+
+def detection_rules_list(user_id: str) -> List[dict]:
+    sb = get_supabase()
+    if sb:
+        try:
+            r = sb.table("detection_rules").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+            return r.data or []
+        except Exception:
+            pass
+    path = os.path.join(DATA_DIR, user_id, "detection_rules.json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def detection_rule_create(user_id: str, name: str, pattern: str, rule_type: str = "keyword",
+                          action: str = "flag", description: str = "") -> Optional[dict]:
+    entry = {"id": str(uuid.uuid4()), "user_id": user_id, "name": name,
+             "pattern": pattern, "rule_type": rule_type, "action": action,
+             "description": description, "enabled": True,
+             "created_at": datetime.utcnow().isoformat()}
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("detection_rules").insert(entry).execute()
+            return entry
+        except Exception as e:
+            print(f"[SENTINEL] detection_rule_create (Supabase) failed: {e}", flush=True)
+    user_dir = os.path.join(DATA_DIR, user_id)
+    os.makedirs(user_dir, exist_ok=True)
+    path = os.path.join(user_dir, "detection_rules.json")
+    rules = []
+    try:
+        with open(path) as f:
+            rules = json.load(f)
+    except Exception:
+        pass
+    rules.append(entry)
+    with open(path, "w") as f:
+        json.dump(rules, f)
+    return entry
+
+def detection_rule_delete(user_id: str, rule_id: str) -> bool:
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("detection_rules").delete().eq("id", rule_id).eq("user_id", user_id).execute()
+            return True
+        except Exception:
+            pass
+    path = os.path.join(DATA_DIR, user_id, "detection_rules.json")
+    try:
+        with open(path) as f:
+            rules = json.load(f)
+        rules = [r for r in rules if r.get("id") != rule_id]
+        with open(path, "w") as f:
+            json.dump(rules, f)
+        return True
+    except Exception:
+        return False
+
+def detection_rule_toggle(user_id: str, rule_id: str, enabled: bool) -> bool:
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("detection_rules").update({"enabled": enabled}).eq("id", rule_id).eq("user_id", user_id).execute()
+            return True
+        except Exception:
+            pass
+    path = os.path.join(DATA_DIR, user_id, "detection_rules.json")
+    try:
+        with open(path) as f:
+            rules = json.load(f)
+        for r in rules:
+            if r.get("id") == rule_id:
+                r["enabled"] = enabled
+        with open(path, "w") as f:
+            json.dump(rules, f)
+        return True
+    except Exception:
+        return False
+
+def detection_rules_check(text: str, user_id: str) -> List[dict]:
+    """Check text against a user's active rules. Returns list of matches."""
+    import re as _re
+    rules = detection_rules_list(user_id)
+    matches = []
+    for rule in rules:
+        if not rule.get("enabled", True):
+            continue
+        pattern = rule.get("pattern", "")
+        rule_type = rule.get("rule_type", "keyword")
+        try:
+            if rule_type == "regex":
+                if _re.search(pattern, text, _re.IGNORECASE):
+                    matches.append(rule)
+            elif rule_type == "keyword":
+                if pattern.lower() in text.lower():
+                    matches.append(rule)
+            elif rule_type == "domain":
+                for word in text.lower().split():
+                    if pattern.lower() in word:
+                        matches.append(rule)
+                        break
+        except Exception:
+            pass
+    return matches
