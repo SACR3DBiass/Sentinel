@@ -3,1298 +3,1201 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SENTINEL — Settings</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>SENTINEL - Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0a0a0a;--bg-card:#111111;--bg-input:#0a0a0a;
-  --border:#1a1a1a;--border-light:#282828;
-  --red:#dc2626;--red-glow:rgba(220,38,38,0.25);--red-dark:#991b1b;
-  --green:#22c55e;--green-dim:#166534;
-  --yellow:#eab308;--yellow-dim:#854d0e;
-  --blue:#3b82f6;--blue-dim:#1e40af;
-  --purple:#a855f7;
-  --text:#e5e5e5;--text-dim:#a1a1a1;--text-muted:#555;
-  --font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
-  --radius:12px;--radius-sm:8px;
+  --bg:#0a0a0a;--card:#111;--border:#1e1e1e;--red:#DC2626;--green:#22c55e;
+  --yellow:#eab308;--blue:#3b82f6;--purple:#a855f7;--text:#f5f5f5;--dim:#888;
+  --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;--radius:8px;
+  --btn-radius:6px;
 }
-html{font-size:14px}
-body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
-a{color:var(--red);text-decoration:none}
-a:hover{text-decoration:underline}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
+a{color:var(--text);text-decoration:none}
 
-/* Scrollbar */
-::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--border-light);border-radius:3px}
+.topbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--card);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;z-index:1000;gap:16px}
+.topbar-logo{display:flex;align-items:center;gap:10px}
+.topbar-logo svg{width:32px;height:36px;flex-shrink:0}
+.topbar-title{font-weight:700;font-size:18px;letter-spacing:2px}
+.topbar-page{color:var(--dim);font-size:14px;padding-left:16px;border-left:1px solid var(--border)}
+.topbar-spacer{flex:1}
+.topbar-link{color:var(--dim);font-size:13px;cursor:pointer;transition:color .2s}
+.topbar-link:hover{color:var(--text)}
+.topbar-link.active{color:var(--text)}
 
-/* Header */
-.header{position:sticky;top:0;z-index:100;background:rgba(10,10,10,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px}
-.header-left{display:flex;align-items:center;gap:16px}
-.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;letter-spacing:2px;color:#fff}
-.logo svg{width:28px;height:28px}
-.header-nav{display:flex;gap:8px}
-.header-nav button{background:none;border:1px solid var(--border-light);color:var(--text-dim);padding:6px 14px;border-radius:var(--radius-sm);cursor:pointer;font-family:var(--font);font-size:.85rem;transition:all .2s ease}
-.header-nav button:hover{border-color:var(--text-dim);color:var(--text)}
-.hamburger{display:none;background:none;border:none;color:var(--text);font-size:1.5rem;cursor:pointer;padding:4px 8px}
+.main{padding-top:72px;padding-left:24px;padding-right:24px;padding-bottom:40px;max-width:1200px;margin:0 auto}
 
-/* Layout */
-.main{max-width:1200px;margin:0 auto;padding:24px}
-.page-title{font-size:1.5rem;font-weight:700;margin-bottom:20px}
+.tabs-row{display:grid;grid-template-columns:repeat(9,1fr);gap:6px;margin-bottom:24px}
+.tab-btn{background:var(--card);border:1px solid var(--border);color:var(--dim);padding:10px 8px;border-radius:var(--btn-radius);font-family:var(--font);font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;text-align:center;white-space:nowrap}
+.tab-btn:hover{color:var(--text);border-color:#333}
+.tab-btn.active{color:#fff;background:var(--red);border-color:var(--red)}
+.tab-icon{display:block;font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;font-weight:600}
 
-/* Tab Grid */
-.tab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:28px}
-.tab-btn{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:all .25s ease;text-align:center}
-.tab-btn:hover{border-color:var(--border-light);transform:translateY(-1px)}
-.tab-btn.active{border-color:var(--red);box-shadow:0 0 20px var(--red-glow);transform:translateY(-2px);color:var(--red)}
-.tab-icon{font-size:1.8rem;line-height:1}
-.tab-label{font-size:.8rem;font-weight:500;color:var(--text-dim);transition:color .2s}
-.tab-btn.active .tab-label{color:var(--red)}
+.panel{display:none}
+.panel.active{display:block}
 
-/* Tab Panels */
-.tab-panel{display:none;animation:fadeIn .25s ease}
-.tab-panel.active{display:block}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-title{font-size:16px;font-weight:600}
+.card-subtitle{font-size:13px;color:var(--dim);margin-top:4px}
 
-/* Cards */
-.card{background:linear-gradient(135deg,var(--bg-card) 0%,#0f0f0f 100%);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:all .25s ease}
-.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px}
-.card-title{font-size:1.1rem;font-weight:600}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--btn-radius);font-family:var(--font);font-size:13px;font-weight:500;border:1px solid #2a2a2a;background:#111;color:var(--text);cursor:pointer;transition:all .2s}
+.btn:hover{border-color:#444;background:#1a1a1a}
+.btn-red{background:var(--red);border-color:var(--red);color:#fff}
+.btn-red:hover{background:#b91c1c;border-color:#b91c1c}
+.btn-green{background:#166534;border-color:#166534;color:#fff}
+.btn-green:hover{background:#15803d}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-ghost{background:transparent;border-color:transparent;color:var(--dim)}
+.btn-ghost:hover{color:var(--text);background:rgba(255,255,255,.05)}
 
-/* Buttons */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border:none;border-radius:var(--radius-sm);font-family:var(--font);font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s ease;white-space:nowrap}
-.btn-primary{background:linear-gradient(135deg,var(--red) 0%,var(--red-dark) 100%);color:#fff}
-.btn-primary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 12px var(--red-glow)}
-.btn-secondary{background:#1a1a1a;color:var(--text-dim);border:1px solid var(--border-light)}
-.btn-secondary:hover{border-color:var(--text-muted);color:var(--text)}
-.btn-ghost{background:none;color:var(--text-dim);border:1px solid transparent}
-.btn-ghost:hover{color:var(--text);background:rgba(255,255,255,.04)}
-.btn-danger{background:rgba(220,38,38,.1);color:var(--red);border:1px solid rgba(220,38,38,.2)}
-.btn-danger:hover{background:rgba(220,38,38,.2)}
-.btn-sm{padding:5px 12px;font-size:.78rem}
-.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
-
-/* Inputs */
+.input{width:100%;padding:8px 12px;background:#0d0d0d;border:1px solid var(--border);border-radius:var(--btn-radius);color:var(--text);font-family:var(--font);font-size:13px;outline:none;transition:border-color .2s}
+.input:focus{border-color:var(--red)}
+textarea.input{min-height:80px;resize:vertical}
+select.input{cursor:pointer;appearance:auto}
+.label{display:block;font-size:12px;font-weight:500;color:var(--dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
 .form-group{margin-bottom:14px}
-.form-label{display:block;font-size:.8rem;font-weight:500;color:var(--text-dim);margin-bottom:5px}
-.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;background:var(--bg-input);border:1px solid var(--border-light);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);font-size:.88rem;transition:border-color .2s,box-shadow .2s}
-.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 3px var(--red-glow)}
-.form-textarea{min-height:80px;resize:vertical;font-family:var(--mono);font-size:.82rem}
-.form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23a1a1a1'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.form-hint{font-size:.75rem;color:var(--text-muted);margin-top:4px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 
-/* Toggle Switch */
-.toggle{position:relative;width:40px;height:22px;display:inline-block;flex-shrink:0}
-.toggle input{opacity:0;width:0;height:0}
-.toggle-slider{position:absolute;inset:0;background:#333;border-radius:22px;cursor:pointer;transition:background .25s}
-.toggle-slider::before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;background:#666;top:3px;left:3px;transition:transform .25s,background .25s}
-.toggle input:checked+.toggle-slider{background:var(--green)}
-.toggle input:checked+.toggle-slider::before{transform:translateX(18px);background:#fff}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.badge-green{background:rgba(34,197,94,.15);color:var(--green)}
+.badge-red{background:rgba(220,38,38,.15);color:var(--red)}
+.badge-yellow{background:rgba(234,179,8,.15);color:var(--yellow)}
+.badge-blue{background:rgba(59,130,246,.15);color:var(--blue)}
+.badge-purple{background:rgba(168,85,247,.15);color:var(--purple)}
+.badge-gray{background:rgba(136,136,136,.15);color:var(--dim)}
 
-/* Badges */
-.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.badge-success{background:rgba(34,197,94,.12);color:var(--green)}
-.badge-error{background:rgba(220,38,38,.12);color:var(--red)}
-.badge-warning{background:rgba(234,179,8,.12);color:var(--yellow)}
-.badge-info{background:rgba(59,130,246,.12);color:var(--blue)}
-.badge-purple{background:rgba(168,85,247,.12);color:var(--purple)}
-.badge-neutral{background:rgba(161,161,161,.1);color:var(--text-dim)}
+.empty-state{text-align:center;padding:48px 24px;color:var(--dim)}
+.empty-state-icon{font-size:32px;margin-bottom:12px;opacity:.4}
+.empty-state-text{font-size:14px}
 
-/* Status dot */
-.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
-.status-dot.active{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,.4)}
-.status-dot.inactive{background:#555}
+.conn-item{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)}
+.conn-item:last-child{border-bottom:none}
+.conn-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.conn-dot.online{background:var(--green)}
+.conn-dot.offline{background:var(--dim)}
+.conn-info{flex:1;min-width:0}
+.conn-label{font-weight:600;font-size:14px}
+.conn-detail{font-size:12px;color:var(--dim);margin-top:2px;font-family:var(--mono)}
+.conn-actions{display:flex;gap:6px;flex-shrink:0}
 
-/* Connection item */
-.connection-item{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;transition:border-color .2s;background:rgba(17,17,17,.5)}
-.connection-item:hover{border-color:var(--border-light)}
-.connection-info{flex:1;min-width:0}
-.connection-info h4{font-size:.92rem;font-weight:600;margin-bottom:2px;display:flex;align-items:center;gap:8px}
-.connection-info p{font-size:.78rem;color:var(--text-muted);font-family:var(--mono)}
-.connection-actions{display:flex;gap:6px;flex-shrink:0}
+.scan-item{padding:12px 0;border-bottom:1px solid var(--border)}
+.scan-item:last-child{border-bottom:none}
+.scan-top{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.scan-meta{font-size:12px;color:var(--dim)}
+.scan-stats{display:flex;gap:16px;font-size:12px;color:var(--dim);margin-top:4px}
 
-/* Item rows (generic) */
-.item-row{padding:14px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;display:flex;align-items:flex-start;gap:12px;transition:border-color .2s;flex-wrap:wrap}
-.item-row:hover{border-color:var(--border-light)}
-.item-row .item-main{flex:1;min-width:0}
-.item-row .item-meta{display:flex;gap:16px;flex-wrap:wrap;font-size:.78rem;color:var(--text-muted);margin-top:4px}
-.item-row .item-actions{display:flex;gap:6px;align-items:center;flex-shrink:0}
+.member-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)}
+.member-item:last-child{border-bottom:none}
+.member-avatar{width:36px;height:36px;border-radius:50%;background:#2a2a2a;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;flex-shrink:0;color:var(--red)}
+.member-info{flex:1}
+.member-name{font-weight:500;font-size:14px}
+.member-email{font-size:12px;color:var(--dim)}
+.member-role{font-size:12px;color:var(--dim);margin-top:2px}
 
-/* Avatar */
-.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--red),var(--red-dark));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;color:#fff;flex-shrink:0}
+.invite-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)}
+.invite-item:last-child{border-bottom:none}
 
-/* Stats Grid */
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px}
-.stat-card{background:linear-gradient(135deg,var(--bg-card),#0d0d0d);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center}
-.stat-card .stat-value{font-size:1.6rem;font-weight:800;background:linear-gradient(135deg,var(--red),#f87171);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.stat-card .stat-label{font-size:.75rem;color:var(--text-muted);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+.rule-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)}
+.rule-item:last-child{border-bottom:none}
+.rule-info{flex:1;min-width:0}
+.rule-name{font-weight:500;font-size:14px}
+.rule-pattern{font-family:var(--mono);font-size:12px;color:var(--dim);margin-top:2px;word-break:break-all}
+.rule-badges{display:flex;gap:6px;margin-top:6px}
+.rule-toggle{position:relative;width:40px;height:22px;flex-shrink:0}
+.rule-toggle input{opacity:0;width:0;height:0}
+.rule-toggle .slider{position:absolute;inset:0;background:#333;border-radius:11px;cursor:pointer;transition:.3s}
+.rule-toggle .slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:#666;border-radius:50%;transition:.3s}
+.rule-toggle input:checked+.slider{background:var(--red)}
+.rule-toggle input:checked+.slider::before{transform:translateX(18px);background:#fff}
 
-/* Modal */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s}
-.modal-overlay.show{display:flex}
-.modal{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius);width:100%;max-width:560px;max-height:85vh;overflow-y:auto;padding:24px}
-.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.modal-header h3{font-size:1.1rem;font-weight:600}
-.modal-close{background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;padding:4px 8px;line-height:1}
-.modal-close:hover{color:var(--text)}
+.toggle-row{display:flex;align-items:center;gap:12px;padding:10px 0}
+.toggle-row label{font-size:13px;min-width:120px}
 
-/* Toast */
-.toast-container{position:fixed;top:68px;right:20px;z-index:300;display:flex;flex-direction:column;gap:8px}
-.toast{padding:10px 18px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:500;animation:slideIn .25s ease,fadeOut .3s 2.7s forwards;max-width:340px;word-break:break-word}
+.toggle-switch{position:relative;width:40px;height:22px;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-switch .slider{position:absolute;inset:0;background:#333;border-radius:11px;cursor:pointer;transition:.3s}
+.toggle-switch .slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:#666;border-radius:50%;transition:.3s}
+.toggle-switch input:checked+.slider{background:var(--green)}
+.toggle-switch input:checked+.slider::before{transform:translateX(18px);background:#fff}
+
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center}
+.stat-value{font-size:28px;font-weight:700;color:var(--red);margin-bottom:4px}
+.stat-label{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+
+.sim-item{padding:14px 0;border-bottom:1px solid var(--border)}
+.sim-item:last-child{border-bottom:none}
+.sim-top{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.sim-stats{display:flex;gap:14px;font-size:12px;color:var(--dim);margin-top:6px}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:2000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto}
+.modal-title{font-size:18px;font-weight:600;margin-bottom:20px}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+
+.toast-container{position:fixed;top:72px;right:24px;z-index:3000;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 20px;border-radius:var(--btn-radius);font-size:13px;font-weight:500;animation:toastIn .3s ease;min-width:240px;display:flex;align-items:center;gap:8px}
 .toast-success{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:var(--green)}
 .toast-error{background:rgba(220,38,38,.15);border:1px solid rgba(220,38,38,.3);color:var(--red)}
-@keyframes slideIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
-@keyframes fadeOut{to{opacity:0;transform:translateX(40px)}}
+@keyframes toastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
 
-/* Spinner */
-.spinner-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:14px}
-.spinner{width:32px;height:32px;border:3px solid var(--border-light);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite}
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--red);border-radius:50%;animation:spin .6s linear infinite}
+.spinner-lg{width:32px;height:32px;border-width:3px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.spinner-text{font-size:.82rem;color:var(--text-muted)}
+.loading-center{display:flex;align-items:center;justify-content:center;padding:40px;gap:10px;color:var(--dim);font-size:13px}
 
-/* Empty state */
-.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted)}
-.empty-state .empty-icon{font-size:2.2rem;margin-bottom:8px}
-.empty-state p{font-size:.88rem}
+.expandable-header{display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 0;color:var(--dim);font-size:13px;user-select:none}
+.expandable-header:hover{color:var(--text)}
+.expandable-header .arrow{transition:transform .2s;display:inline-block}
+.expandable-header.open .arrow{transform:rotate(90deg)}
+.expandable-body{display:none;padding:12px 0;font-size:13px;color:var(--dim);line-height:1.7}
+.expandable-body.open{display:block}
 
-/* Guide sections */
-.guide-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text-dim);font-size:.82rem;margin-top:10px;padding:6px 0;background:none;border:none;font-family:var(--font)}
-.guide-toggle:hover{color:var(--text)}
-.guide-content{display:none;padding:12px 14px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-sm);margin-top:8px;font-size:.82rem;color:var(--text-dim);line-height:1.7}
-.guide-content.open{display:block}
-.guide-content ol{padding-left:18px}
-.guide-content li{margin-bottom:4px}
-.guide-content code{font-family:var(--mono);background:rgba(255,255,255,.06);padding:1px 5px;border-radius:3px;font-size:.78rem}
+.preview-box{width:100%;padding:20px;border:1px dashed var(--border);border-radius:var(--radius);text-align:center;margin-top:12px}
+.preview-box img{max-height:60px;max-width:200px;object-fit:contain}
 
-/* Test section */
-.test-section{margin-top:20px;padding:16px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:var(--radius-sm)}
-.test-section h4{font-size:.9rem;font-weight:600;margin-bottom:10px}
-.test-results{margin-top:10px;padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:var(--mono);font-size:.82rem;white-space:pre-wrap;max-height:200px;overflow-y:auto;display:none}
-
-/* Color picker wrapper */
 .color-input-wrap{display:flex;align-items:center;gap:10px}
-.color-input-wrap input[type="color"]{width:40px;height:34px;border:1px solid var(--border-light);border-radius:var(--radius-sm);background:none;cursor:pointer;padding:2px}
-.color-input-wrap .form-input{flex:1}
+.color-input-wrap input[type="color"]{width:40px;height:32px;border:1px solid var(--border);border-radius:4px;background:transparent;cursor:pointer;padding:2px}
+.color-input-wrap .color-val{font-family:var(--mono);font-size:12px;color:var(--dim)}
 
-/* Responsive */
-@media(max-width:768px){
-  .header-nav{display:none;position:absolute;top:56px;left:0;right:0;background:var(--bg-card);border-bottom:1px solid var(--border);padding:12px 20px;flex-direction:column;gap:8px}
-  .header-nav.open{display:flex}
-  .hamburger{display:block}
-  .tab-grid{grid-template-columns:repeat(3,1fr);gap:8px}
-  .tab-btn{padding:12px 6px}
-  .tab-icon{font-size:1.4rem}
-  .tab-label{font-size:.7rem}
-  .form-row{grid-template-columns:1fr}
-  .connection-item{flex-direction:column;align-items:flex-start}
-  .connection-actions{width:100%}
-  .item-row{flex-direction:column}
-  .item-actions{width:100%}
-  .stats-grid{grid-template-columns:repeat(2,1fr)}
-  .main{padding:16px}
+@media(max-width:900px){
+  .tabs-row{grid-template-columns:repeat(3,1fr)}
+  .form-row,.form-row-3{grid-template-columns:1fr}
+  .stat-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+  .tabs-row{grid-template-columns:repeat(2,1fr)}
+  .topbar{padding:0 12px}
+  .main{padding-left:12px;padding-right:12px}
 }
 </style>
 </head>
 <body>
 
-<header class="header">
-  <div class="header-left">
-    <a href="/dashboard" class="logo">
-      <svg viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg" width="28" height="31"><path d="M20 2L4 10v12c0 11 7.2 21.3 16 24 8.8-2.7 16-13 16-24V10L20 2z" fill="url(#lgS)" stroke="#991B1B" stroke-width="1.5"/><path d="M20 10v8m0 0v8m0-8l-4-4m4 4l4-4" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="lgS" x1="4" y1="2" x2="36" y2="46"><stop stop-color="#DC2626"/><stop offset="1" stop-color="#7F1D1D"/></linearGradient></defs></svg>
-      SENTINEL
-    </a>
-    <button class="hamburger" onclick="document.querySelector('.header-nav').classList.toggle('open')">&#9776;</button>
+<div class="topbar">
+  <div class="topbar-logo">
+    <svg viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="lgS" x1="0" y1="0" x2="40" y2="44">
+          <stop offset="0%" stop-color="#DC2626"/>
+          <stop offset="100%" stop-color="#991b1b"/>
+        </linearGradient>
+      </defs>
+      <path d="M20 2L4 12v16l16 14 16-14V12L20 2z" stroke="url(#lgS)" stroke-width="2.5" fill="none"/>
+      <path d="M18 14l-4 8h6l-2 10 8-10h-5l4-8-7 2 5-6-6 4z" fill="url(#lgS)"/>
+    </svg>
+    <span class="topbar-title">SENTINEL</span>
   </div>
-  <nav class="header-nav">
-    <a href="/dashboard"><button>Back to Dashboard</button></a>
-    <a href="/login" onclick="event.preventDefault(); logout()"><button>Logout</button></a>
-  </nav>
-</header>
+  <span class="topbar-page">Settings</span>
+  <span class="topbar-spacer"></span>
+  <a class="topbar-link" href="/dashboard" id="backLink">Back to Dashboard</a>
+  <span class="topbar-link" data-action="logout">Logout</span>
+</div>
 
-<main class="main">
-  <div class="tab-grid" id="tabGrid">
-    <div class="tab-btn active" data-tab="connections"><div class="tab-icon">📧</div><div class="tab-label">Email Connections</div></div>
-    <div class="tab-btn" data-tab="scans"><div class="tab-icon">📋</div><div class="tab-label">Scan History</div></div>
-    <div class="tab-btn" data-tab="team"><div class="tab-icon">👥</div><div class="tab-label">Team</div></div>
-    <div class="tab-btn" data-tab="reports"><div class="tab-icon">📊</div><div class="tab-label">Reports</div></div>
-    <div class="tab-btn" data-tab="branding"><div class="tab-icon">🎨</div><div class="tab-label">Branding</div></div>
-    <div class="tab-btn" data-tab="rules"><div class="tab-icon">⚡</div><div class="tab-label">Rules</div></div>
-    <div class="tab-btn" data-tab="alerts"><div class="tab-icon">🔔</div><div class="tab-label">Alerts</div></div>
-    <div class="tab-btn" data-tab="intel"><div class="tab-icon">🧠</div><div class="tab-label">Intel</div></div>
-    <div class="tab-btn" data-tab="simulations"><div class="tab-icon">🎯</div><div class="tab-label">Simulations</div></div>
+<div class="main">
+  <div class="tabs-row">
+    <button class="tab-btn active" data-tab="connections"><span class="tab-icon">[C]</span>Email Connections</button>
+    <button class="tab-btn" data-tab="scans"><span class="tab-icon">[S]</span>Scan History</button>
+    <button class="tab-btn" data-tab="team"><span class="tab-icon">[T]</span>Team</button>
+    <button class="tab-btn" data-tab="reports"><span class="tab-icon">[R]</span>Reports</button>
+    <button class="tab-btn" data-tab="branding"><span class="tab-icon">[B]</span>Branding</button>
+    <button class="tab-btn" data-tab="rules"><span class="tab-icon">[L]</span>Rules</button>
+    <button class="tab-btn" data-tab="alerts"><span class="tab-icon">[A]</span>Alerts</button>
+    <button class="tab-btn" data-tab="intel"><span class="tab-icon">[I]</span>Intel</button>
+    <button class="tab-btn" data-tab="simulations"><span class="tab-icon">[X]</span>Simulations</button>
   </div>
 
-  <!-- ==================== 1. EMAIL CONNECTIONS ==================== -->
-  <div class="tab-panel active" id="panel-connections">
+  <!-- CONNECTIONS -->
+  <div class="panel active" id="panel-connections">
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Email Connections</div>
-        <button class="btn btn-primary" onclick="openModal('addConnectionModal')">+ Add Connection</button>
-      </div>
-      <div id="connectionsList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading connections...</div></div></div>
-    </div>
-  </div>
-
-  <!-- ==================== 2. SCAN HISTORY ==================== -->
-  <div class="tab-panel" id="panel-scans">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Scan History</div>
-      </div>
-      <div id="scansList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading scan history...</div></div></div>
-    </div>
-  </div>
-
-  <!-- ==================== 3. TEAM ==================== -->
-  <div class="tab-panel" id="panel-team">
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-header">
-        <div class="card-title">Invite Team Member</div>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
-        <div class="form-group" style="flex:1;min-width:200px;margin:0">
-          <label class="form-label">Email Address</label>
-          <input type="email" class="form-input" id="inviteEmail" placeholder="teammate@company.com">
+        <div>
+          <div class="card-title">Email Connections</div>
+          <div class="card-subtitle">Manage IMAP connections for phishing email scanning</div>
         </div>
-        <div class="form-group" style="min-width:160px;margin:0">
-          <label class="form-label">Role</label>
-          <select class="form-select" id="inviteRole">
-            <option value="friend">Friend (Lite Access)</option>
-            <option value="member">Member (Full Access)</option>
-          </select>
+        <button class="btn btn-red" data-action="open-add-connection">+ Add Connection</button>
+      </div>
+      <div id="connections-list"><div class="loading-center"><div class="spinner"></div>Loading connections...</div></div>
+    </div>
+  </div>
+
+  <!-- SCANS -->
+  <div class="panel" id="panel-scans">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Scan History</div>
+          <div class="card-subtitle">Previous and ongoing email scans</div>
         </div>
-        <button class="btn btn-primary" onclick="sendInvite()">Send Invite</button>
       </div>
+      <div id="scans-list"><div class="loading-center"><div class="spinner"></div>Loading scan history...</div></div>
     </div>
-    <div class="card" style="margin-bottom:20px">
+  </div>
+
+  <!-- TEAM -->
+  <div class="panel" id="panel-team">
+    <div class="card">
       <div class="card-header">
-        <div class="card-title">Pending Invites</div>
+        <div>
+          <div class="card-title">Team Members</div>
+          <div class="card-subtitle">Manage who has access to SENTINEL</div>
+        </div>
       </div>
-      <div id="invitesList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading invites...</div></div></div>
+      <div id="team-members"><div class="loading-center"><div class="spinner"></div>Loading team...</div></div>
     </div>
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Team Members</div>
+        <div>
+          <div class="card-title">Pending Invites</div>
+          <div class="card-subtitle">Invite new members by email</div>
+        </div>
       </div>
-      <div id="membersList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading members...</div></div></div>
+      <form id="invite-form" style="margin-bottom:16px">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="label">Email Address</label>
+            <input class="input" type="email" name="email" placeholder="user@example.com" required>
+          </div>
+          <div class="form-group">
+            <label class="label">Role</label>
+            <select class="input" name="role">
+              <option value="friend">Friend Lite</option>
+              <option value="member">Member Full</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-red" type="submit">Send Invite</button>
+      </form>
+      <div id="team-invites"></div>
     </div>
   </div>
 
-  <!-- ==================== 4. REPORTS ==================== -->
-  <div class="tab-panel" id="panel-reports">
+  <!-- REPORTS -->
+  <div class="panel" id="panel-reports">
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Scheduled Reports</div>
+        <div>
+          <div class="card-title">Report Schedule</div>
+          <div class="card-subtitle">Configure automated summary reports</div>
+        </div>
       </div>
-      <div id="reportsContent"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading report settings...</div></div></div>
+      <div id="reports-content"><div class="loading-center"><div class="spinner"></div>Loading reports...</div></div>
     </div>
   </div>
 
-  <!-- ==================== 5. BRANDING ==================== -->
-  <div class="tab-panel" id="panel-branding">
-    <div class="card" style="margin-bottom:20px">
+  <!-- BRANDING -->
+  <div class="panel" id="panel-branding">
+    <div class="card">
       <div class="card-header">
-        <div class="card-title">White-Label Branding</div>
+        <div>
+          <div class="card-title">Branding</div>
+          <div class="card-subtitle">Customize appearance for your organization</div>
+        </div>
       </div>
-      <div id="brandingContent"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading branding settings...</div></div></div>
-    </div>
-    <div class="card" id="brandingPreviewCard" style="display:none">
-      <div class="card-header">
-        <div class="card-title">Live Preview</div>
+      <form id="branding-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="label">Organization Display Name</label>
+            <input class="input" type="text" name="org_display_name" placeholder="My Company">
+          </div>
+          <div class="form-group">
+            <label class="label">Logo URL</label>
+            <input class="input" type="url" name="logo_url" placeholder="https://example.com/logo.png">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="label">Primary Color</label>
+            <div class="color-input-wrap">
+              <input type="color" name="primary_color" value="#DC2626">
+              <span class="color-val" id="primary-color-val">#DC2626</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="label">Secondary Color</label>
+            <div class="color-input-wrap">
+              <input type="color" name="secondary_color" value="#111111">
+              <span class="color-val" id="secondary-color-val">#111111</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="label">Custom CSS</label>
+          <textarea class="input" name="custom_css" placeholder=".custom-class { color: red; }"></textarea>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-red" type="submit">Save Branding</button>
+          <button class="btn" type="button" data-action="reset-branding">Reset to Default</button>
+        </div>
+      </form>
+      <div class="preview-box" id="branding-preview" style="display:none">
+        <div style="margin-bottom:8px;font-size:12px;color:var(--dim)">PREVIEW</div>
+        <img id="branding-preview-img" src="" alt="Logo preview">
       </div>
-      <div id="brandingPreview" style="padding:16px;border:1px dashed var(--border-light);border-radius:var(--radius-sm);min-height:80px;display:flex;align-items:center;gap:12px"></div>
     </div>
   </div>
 
-  <!-- ==================== 6. RULES ==================== -->
-  <div class="tab-panel" id="panel-rules">
-    <div class="card" style="margin-bottom:20px">
+  <!-- RULES -->
+  <div class="panel" id="panel-rules">
+    <div class="card">
       <div class="card-header">
-        <div class="card-title">Create Detection Rule</div>
+        <div>
+          <div class="card-title">Detection Rules</div>
+          <div class="card-subtitle">Create and manage phishing detection rules</div>
+        </div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Name</label><input type="text" class="form-input" id="ruleName" placeholder="Rule name"></div>
-        <div class="form-group"><label class="form-label">Pattern</label><input type="text" class="form-input" id="rulePattern" placeholder="e.g. urgent-wire-transfer"></div>
+      <form id="rule-form" style="margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="label">Rule Name</label>
+            <input class="input" type="text" name="name" placeholder="e.g. Bank Phish" required>
+          </div>
+          <div class="form-group">
+            <label class="label">Pattern</label>
+            <input class="input" type="text" name="pattern" placeholder="e.g. secure-login" required>
+          </div>
+          <div class="form-group">
+            <label class="label">Rule Type</label>
+            <select class="input" name="rule_type">
+              <option value="keyword">Keyword</option>
+              <option value="regex">Regex</option>
+              <option value="domain">Domain</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="label">Action</label>
+            <select class="input" name="action">
+              <option value="flag">Flag</option>
+              <option value="whitelist">Whitelist</option>
+              <option value="block">Block</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="label">Description</label>
+            <input class="input" type="text" name="description" placeholder="Optional description">
+          </div>
+        </div>
+        <button class="btn btn-red" type="submit">Create Rule</button>
+      </form>
+      <div id="rules-list"><div class="loading-center"><div class="spinner"></div>Loading rules...</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Test Rules</div>
+          <div class="card-subtitle">Check text against your active rules</div>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Type</label>
-          <select class="form-select" id="ruleType"><option value="keyword">Keyword</option><option value="regex">Regex</option><option value="domain">Domain</option></select>
+          <input class="input" type="text" id="rule-test-input" placeholder="Enter text to test...">
         </div>
         <div class="form-group">
-          <label class="form-label">Action</label>
-          <select class="form-select" id="ruleAction"><option value="flag">Flag</option><option value="whitelist">Whitelist</option><option value="block">Block</option></select>
+          <button class="btn" data-action="test-rules">Run Test</button>
         </div>
       </div>
-      <div class="form-group"><label class="form-label">Description</label><input type="text" class="form-input" id="ruleDesc" placeholder="Optional description"></div>
-      <button class="btn btn-primary" onclick="createRule()">Create Rule</button>
-    </div>
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-header">
-        <div class="card-title">Active Rules</div>
-      </div>
-      <div id="rulesList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading rules...</div></div></div>
-    </div>
-    <div class="card">
-      <div class="card-title" style="margin-bottom:12px">Test Rules</div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <input type="text" class="form-input" id="ruleTestInput" placeholder="Enter text to test against rules..." style="flex:1;min-width:200px">
-        <button class="btn btn-secondary" onclick="testRules()">Test</button>
-      </div>
-      <div class="test-results" id="ruleTestResults"></div>
+      <div id="rule-test-result"></div>
     </div>
   </div>
 
-  <!-- ==================== 7. ALERTS ==================== -->
-  <div class="tab-panel" id="panel-alerts">
+  <!-- ALERTS -->
+  <div class="panel" id="panel-alerts">
     <div class="card">
       <div class="card-header">
-        <div class="card-title">Webhook Alerts</div>
+        <div>
+          <div class="card-title">Alert Configuration</div>
+          <div class="card-subtitle">Set up notifications for detected threats</div>
+        </div>
       </div>
-      <div id="alertsContent"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading alert settings...</div></div></div>
+      <div id="alerts-content"><div class="loading-center"><div class="spinner"></div>Loading alert config...</div></div>
     </div>
   </div>
 
-  <!-- ==================== 8. INTEL ==================== -->
-  <div class="tab-panel" id="panel-intel">
-    <div id="intelStatsGrid" class="stats-grid" style="margin-bottom:20px"></div>
-    <div class="card" style="margin-bottom:20px">
+  <!-- INTEL -->
+  <div class="panel" id="panel-intel">
+    <div class="card">
       <div class="card-header">
-        <div class="card-title">Submit Threat Indicator</div>
+        <div>
+          <div class="card-title">Threat Intelligence</div>
+          <div class="card-subtitle">View indicators and submit new intel</div>
+        </div>
       </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Indicator</label><input type="text" class="form-input" id="intelIndicator" placeholder="e.g. evil-phish.com"></div>
+      <div id="intel-stats"></div>
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
+        <div class="card-title" style="margin-bottom:12px">Submit Indicator</div>
+        <form id="intel-form">
+          <div class="form-row-3">
+            <div class="form-group">
+              <label class="label">Indicator</label>
+              <input class="input" type="text" name="indicator" placeholder="e.g. evil-phish.com" required>
+            </div>
+            <div class="form-group">
+              <label class="label">Type</label>
+              <select class="input" name="indicator_type">
+                <option value="domain">Domain</option>
+                <option value="url">URL</option>
+                <option value="ip">IP Address</option>
+                <option value="hash">Hash</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="label">Category</label>
+              <select class="input" name="category">
+                <option value="phishing">Phishing</option>
+                <option value="phishing_sender">Phishing Sender</option>
+                <option value="phishing_url">Phishing URL</option>
+                <option value="malware">Malware</option>
+                <option value="credential_harvest">Credential Harvest</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-red" type="submit">Submit</button>
+        </form>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Intel Feed</div>
+      </div>
+      <div id="intel-feed"><div class="loading-center"><div class="spinner"></div>Loading feed...</div></div>
+    </div>
+  </div>
+
+  <!-- SIMULATIONS -->
+  <div class="panel" id="panel-simulations">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Phishing Simulations</div>
+          <div class="card-subtitle">Create and manage training simulations</div>
+        </div>
+      </div>
+      <form id="sim-form" style="margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="label">Campaign Name</label>
+            <input class="input" type="text" name="name" placeholder="e.g. Q3 Security Test" required>
+          </div>
+          <div class="form-group">
+            <label class="label">Template</label>
+            <select class="input" name="template_type">
+              <option value="credential_harvest">Credential Harvest</option>
+              <option value="urgent_request">Urgent Request</option>
+              <option value="package_delivery">Package Delivery</option>
+              <option value="tax_refund">Tax Refund</option>
+              <option value="it_update">IT Update</option>
+            </select>
+          </div>
+        </div>
         <div class="form-group">
-          <label class="form-label">Type</label>
-          <select class="form-select" id="intelType"><option value="domain">Domain</option><option value="url">URL</option><option value="ip">IP Address</option><option value="hash">Hash</option></select>
+          <label class="label">Target User IDs (comma separated)</label>
+          <input class="input" type="text" name="target_user_ids" placeholder="e.g. user1, user2, user3">
         </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Category</label>
-        <select class="form-select" id="intelCategory"><option value="phishing">Phishing</option><option value="phishing_sender">Phishing Sender</option><option value="phishing_url">Phishing URL</option><option value="malware">Malware</option><option value="credential_harvest">Credential Harvest</option><option value="other">Other</option></select>
-      </div>
-      <button class="btn btn-primary" onclick="submitIntel()">Submit Indicator</button>
-    </div>
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Threat Feed</div>
-      </div>
-      <div id="intelFeedList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading intel feed...</div></div></div>
-    </div>
-  </div>
-
-  <!-- ==================== 9. SIMULATIONS ==================== -->
-  <div class="tab-panel" id="panel-simulations">
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-header">
-        <div class="card-title">Create Simulation</div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label class="form-label">Campaign Name</label><input type="text" class="form-input" id="simName" placeholder="Q3 Phishing Test"></div>
-        <div class="form-group">
-          <label class="form-label">Template Type</label>
-          <select class="form-select" id="simTemplate"><option value="credential_harvest">Credential Harvest</option><option value="urgent_request">Urgent Request</option><option value="package_delivery">Package Delivery</option><option value="tax_refund">Tax Refund</option><option value="it_update">IT Update</option></select>
-        </div>
-      </div>
-      <div class="form-group"><label class="form-label">Target User IDs (comma separated)</label><input type="text" class="form-input" id="simTargets" placeholder="1, 2, 3"></div>
-      <button class="btn btn-primary" onclick="createSimulation()">Create Campaign</button>
-    </div>
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Campaigns</div>
-      </div>
-      <div id="simList"><div class="spinner-wrap"><div class="spinner"></div><div class="spinner-text">Loading simulations...</div></div></div>
-    </div>
-  </div>
-</main>
-
-<!-- ==================== MODALS ==================== -->
-<div class="modal-overlay" id="addConnectionModal">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>Add Email Connection</h3>
-      <button class="modal-close" onclick="closeModal('addConnectionModal')">&times;</button>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Connection Label</label>
-      <input type="text" class="form-input" id="connLabel" placeholder="My Gmail">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Provider</label>
-      <select class="form-select" id="connProvider" onchange="onProviderChange()">
-        <option value="gmail">Gmail</option>
-        <option value="outlook">Outlook / Microsoft 365</option>
-        <option value="yahoo">Yahoo Mail</option>
-        <option value="custom">Custom (IMAP)</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">IMAP Host</label><input type="text" class="form-input" id="connHost" placeholder="imap.gmail.com"></div>
-      <div class="form-group"><label class="form-label">Port</label><input type="number" class="form-input" id="connPort" value="993"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Email Address</label><input type="email" class="form-input" id="connEmail" placeholder="you@gmail.com"></div>
-      <div class="form-group"><label class="form-label">App Password</label><input type="password" class="form-input" id="connPassword" placeholder="xxxx-xxxx-xxxx-xxxx"></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Folder</label><input type="text" class="form-input" id="connFolder" value="INBOX"></div>
-      <div class="form-group"><label class="form-label">Scan Interval (minutes)</label><input type="number" class="form-input" id="connInterval" value="60" min="15"></div>
-    </div>
-
-    <!-- Gmail Guide -->
-    <div id="gmailGuide">
-      <button class="guide-toggle" onclick="toggleGuide('gmailGuideContent', this)">&#9662; How to get a Gmail App Password</button>
-      <div class="guide-content" id="gmailGuideContent">
-        <ol>
-          <li>Go to <a href="https://myaccount.google.com/security" target="_blank">Google Account Security</a>.</li>
-          <li>Ensure <strong>2-Step Verification</strong> is enabled on your account.</li>
-          <li>Go to <a href="https://myaccount.google.com/apppasswords" target="_blank">App Passwords</a>.</li>
-          <li>Select app: <strong>Mail</strong>, select device: <strong>Other (Custom name)</strong>, type "SENTINEL".</li>
-          <li>Click <strong>Generate</strong>. Copy the 16-character password and paste it above.</li>
-        </ol>
-        <p style="margin-top:8px">Note: IMAP must be enabled in Gmail Settings &rarr; Forwarding and POP/IMAP.</p>
-      </div>
-    </div>
-
-    <!-- Outlook Guide -->
-    <div id="outlookGuide">
-      <button class="guide-toggle" onclick="toggleGuide('outlookGuideContent', this)">&#9662; How to get an Outlook App Password</button>
-      <div class="guide-content" id="outlookGuideContent">
-        <ol>
-          <li>Go to <a href="https://account.microsoft.com/security" target="_blank">Microsoft Account Security</a>.</li>
-          <li>Click <strong>Advanced security options</strong>.</li>
-          <li>Under <strong>App passwords</strong>, click <strong>Create a new app password</strong>.</li>
-          <li>Copy the generated password and paste it above.</li>
-        </ol>
-        <p style="margin-top:8px">For Microsoft 365 / Exchange, you may need admin-generated app passwords or OAuth. IMAP host is typically <code>outlook.office365.com</code>, port <code>993</code>.</p>
-      </div>
-    </div>
-
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
-      <button class="btn btn-secondary" onclick="closeModal('addConnectionModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitConnection()">Add Connection</button>
+        <button class="btn btn-red" type="submit">Create Simulation</button>
+      </form>
+      <div id="sim-list"><div class="loading-center"><div class="spinner"></div>Loading simulations...</div></div>
     </div>
   </div>
 </div>
 
-<!-- Toast Container -->
-<div class="toast-container" id="toastContainer"></div>
+<!-- ADD CONNECTION MODAL -->
+<div class="modal-overlay" id="modal-add-connection">
+  <div class="modal">
+    <div class="modal-title">Add Email Connection</div>
+    <form id="add-connection-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">Label</label>
+          <input class="input" type="text" name="label" placeholder="e.g. Work Email" required>
+        </div>
+        <div class="form-group">
+          <label class="label">Provider</label>
+          <select class="input" name="provider" id="conn-provider">
+            <option value="gmail">Gmail</option>
+            <option value="outlook">Outlook / Microsoft 365</option>
+            <option value="yahoo">Yahoo Mail</option>
+            <option value="custom">Custom IMAP</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">IMAP Host</label>
+          <input class="input" type="text" name="imap_host" id="conn-host" value="imap.gmail.com">
+        </div>
+        <div class="form-group">
+          <label class="label">IMAP Port</label>
+          <input class="input" type="number" name="imap_port" id="conn-port" value="993">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">Email Address</label>
+          <input class="input" type="email" name="imap_username" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label class="label">App Password</label>
+          <input class="input" type="password" name="imap_password" placeholder="16-character app password" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="label">Folder</label>
+          <input class="input" type="text" name="folder" value="INBOX">
+        </div>
+        <div class="form-group">
+          <label class="label">Scan Interval (hours)</label>
+          <input class="input" type="number" name="scan_interval" value="6" min="1" max="168">
+        </div>
+      </div>
+
+      <div class="expandable-header" id="guide-gmail-header">
+        <span class="arrow">&#9654;</span> Gmail App Password Guide
+      </div>
+      <div class="expandable-body" id="guide-gmail-body">
+        1. Go to <a href="https://myaccount.google.com/security" target="_blank" style="color:var(--blue)">myaccount.google.com/security</a><br>
+        2. Enable 2-Step Verification if not already active<br>
+        3. Go to <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:var(--blue)">App passwords</a><br>
+        4. Select "Mail" and your device, then click Generate<br>
+        5. Copy the 16-character password and paste it above<br>
+        6. IMAP must be enabled in Gmail Settings &gt; Forwarding and POP/IMAP
+      </div>
+      <div class="expandable-header" id="guide-outlook-header">
+        <span class="arrow">&#9654;</span> Outlook / Microsoft 365 App Password Guide
+      </div>
+      <div class="expandable-body" id="guide-outlook-body">
+        1. Go to <a href="https://account.activedirectory.microsoft.com/" target="_blank" style="color:var(--blue)">account.activedirectory.microsoft.com</a><br>
+        2. Sign in with your Microsoft 365 account<br>
+        3. Go to Security info &gt; Add method &gt; App password<br>
+        4. Name it (e.g. "SENTINEL") and click Add<br>
+        5. Copy the generated password and paste it above<br>
+        6. Ensure Basic Authentication is enabled for IMAP in your org admin
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" type="button" data-action="close-modal">Cancel</button>
+        <button class="btn btn-red" type="submit">Connect</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
 
 <script>
-window.onerror = function(msg, src, line) {
-  var el = document.getElementById('connectionsList');
-  if (el) el.innerHTML = '<div class="empty-state"><p style="color:var(--red)">JavaScript Error: ' + String(msg).replace(/</g,'&lt;') + ' (line ' + line + ')</p></div>';
-  return false;
-};
+(function(){
+  "use strict";
 
-if (!getToken()) {
-  window.location.href = '/login';
-  throw new Error('No auth token');
-}
-
-/* ============================
-   API HELPERS
-   ============================ */
-function apiGet(path) {
-  return fetch('/api/v1' + path, {headers: {'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json'}})
-    .then(function(r) { if(r.status===401){logout();throw new Error('expired');} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||'Failed')}); return r.json(); });
-}
-function apiPost(path, body) {
-  return fetch('/api/v1' + path, {method:'POST', headers:{'Authorization':'Bearer '+getToken(),'Content-Type':'application/json'}, body:JSON.stringify(body)})
-    .then(function(r) { if(r.status===401){logout();throw new Error('expired');} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||'Failed')}); return r.json(); });
-}
-function apiDel(path) {
-  return fetch('/api/v1' + path, {method:'DELETE', headers:{'Authorization':'Bearer '+getToken()}})
-    .then(function(r) { if(r.status===401){logout();throw new Error('expired')} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||'Failed')}); return r.json(); });
-}
-function apiPatch(path, body) {
-  return fetch('/api/v1' + path, {method:'PATCH', headers:{'Authorization':'Bearer '+getToken(),'Content-Type':'application/json'}, body:JSON.stringify(body)})
-    .then(function(r) { if(r.status===401){logout();throw new Error('expired')} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||'Failed')}); return r.json(); });
-}
-function getToken() { return localStorage.getItem('sentinel_token'); }
-function logout() { localStorage.removeItem('sentinel_token'); localStorage.removeItem('sentinel_user'); window.location.href='/login'; }
-
-/* ============================
-   TOAST
-   ============================ */
-function toast(msg, type) {
-  var c = document.getElementById('toastContainer');
-  var el = document.createElement('div');
-  el.className = 'toast toast-' + (type || 'success');
-  el.textContent = msg;
-  c.appendChild(el);
-  setTimeout(function() { if(el.parentNode) el.parentNode.removeChild(el); }, 3200);
-}
-
-/* ============================
-   MODAL
-   ============================ */
-function openModal(id) { document.getElementById(id).classList.add('show'); }
-function closeModal(id) { document.getElementById(id).classList.remove('show'); }
-
-/* ============================
-   TABS
-   ============================ */
-var loadedTabs = {};
-var currentTab = 'connections';
-
-document.getElementById('tabGrid').addEventListener('click', function(e) {
-  var btn = e.target.closest('.tab-btn');
-  if (!btn) return;
-  var tab = btn.getAttribute('data-tab');
-  switchTab(tab);
-});
-
-function switchTab(tab) {
-  if (tab === currentTab) return;
-  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
-  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
-  document.querySelector('[data-tab="' + tab + '"]').classList.add('active');
-  document.getElementById('panel-' + tab).classList.add('active');
-  currentTab = tab;
-  document.querySelector('.header-nav').classList.remove('open');
-  if (!loadedTabs[tab]) {
-    loadedTabs[tab] = true;
-    loadTab(tab);
-  }
-}
-
-function loadTab(tab) {
-  switch(tab) {
-    case 'connections': loadConnections(); break;
-    case 'scans': loadScans(); break;
-    case 'team': loadTeam(); break;
-    case 'reports': loadReports(); break;
-    case 'branding': loadBranding(); break;
-    case 'rules': loadRules(); break;
-    case 'alerts': loadAlerts(); break;
-    case 'intel': loadIntel(); break;
-    case 'simulations': loadSimulations(); break;
-  }
-}
-
-function esc(s) {
-  var d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-function fmtDate(s) {
-  if (!s) return '—';
-  try { return new Date(s).toLocaleString(); } catch(e) { return s; }
-}
-
-/* ============================
-   1. EMAIL CONNECTIONS
-   ============================ */
-function loadConnections() {
-  var el = document.getElementById('connectionsList');
-  apiGet('/connections').then(function(data) {
-    var list = data.connections || [];
-    if (!list.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📧</div><p>No connections yet. Add one to get started.</p></div>'; return; }
-    el.innerHTML = list.map(function(c) {
-      return '<div class="connection-item">' +
-        '<div class="status-dot ' + (c.is_active !== false ? 'active' : 'inactive') + '"></div>' +
-        '<div class="connection-info">' +
-          '<h4>' + esc(c.label || 'Connection') + '</h4>' +
-          '<p>' + esc(c.imap_username || '') + ' @ ' + esc(c.imap_host || '') + '</p>' +
-          '<p style="margin-top:2px">Last scan: ' + fmtDate(c.last_scan) + '</p>' +
-        '</div>' +
-        '<div class="connection-actions">' +
-          '<button class="btn btn-sm btn-secondary" onclick="scanNow(\'' + c.id + '\', this)">Scan Now</button>' +
-          '<button class="btn btn-sm btn-danger" onclick="removeConnection(\'' + c.id + '\', this)">Remove</button>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }).catch(function(e) {
-    el.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Failed to load connections: ' + (e.message || 'Unknown error').replace(/</g,'&lt;') + '</p></div>';
-  });
-}
-
-function scanNow(id, btn) {
-  btn.disabled = true;
-  btn.textContent = 'Scanning...';
-  apiPost('/scan/' + id, {}).then(function() {
-    toast('Scan started successfully');
-    btn.textContent = 'Scan Now';
-    btn.disabled = false;
-  }).catch(function(e) {
-    toast(e.message, 'error');
-    btn.textContent = 'Scan Now';
-    btn.disabled = false;
-  });
-}
-
-function removeConnection(id, btn) {
-  if (!confirm('Remove this connection?')) return;
-  btn.disabled = true;
-  apiDel('/connections/' + id).then(function() {
-    toast('Connection removed');
-    loadConnections();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-    btn.disabled = false;
-  });
-}
-
-function onProviderChange() {
-  var p = document.getElementById('connProvider').value;
-  var host = document.getElementById('connHost');
-  var port = document.getElementById('connPort');
-  if (p === 'gmail') { host.value = 'imap.gmail.com'; port.value = '993'; }
-  else if (p === 'outlook') { host.value = 'outlook.office365.com'; port.value = '993'; }
-  else if (p === 'yahoo') { host.value = 'imap.mail.yahoo.com'; port.value = '993'; }
-  else { host.value = ''; port.value = '993'; }
-}
-
-function submitConnection() {
-  var data = {
-    label: document.getElementById('connLabel').value,
-    provider: document.getElementById('connProvider').value,
-    imap_host: document.getElementById('connHost').value,
-    imap_port: parseInt(document.getElementById('connPort').value) || 993,
-    imap_username: document.getElementById('connEmail').value,
-    imap_password: document.getElementById('connPassword').value,
-    folder: document.getElementById('connFolder').value || 'INBOX',
-    scan_interval: parseInt(document.getElementById('connInterval').value) || 60
+  window.onerror = function(msg, src, line, col, err) {
+    showToast("JS Error: " + msg + " (" + (line||"?") + ":" + (col||"?") + ")", "error");
   };
-  if (!data.label || !data.imap_host || !data.imap_username || !data.imap_password) {
-    toast('Please fill in all required fields', 'error'); return;
+
+  if(!getToken()){ window.location.href = "/login"; return; }
+
+  function getToken(){ return localStorage.getItem("sentinel_token"); }
+  function logout(){ localStorage.removeItem("sentinel_token"); localStorage.removeItem("sentinel_user"); window.location.href = "/login"; }
+
+  function apiGet(path){
+    return fetch("/api/v1"+path, {headers:{"Authorization":"Bearer "+getToken(),"Content-Type":"application/json"}})
+      .then(function(r){ if(r.status===401){logout();throw new Error("expired")} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||"Failed")}); return r.json(); });
   }
-  apiPost('/connections', data).then(function() {
-    toast('Connection added successfully');
-    closeModal('addConnectionModal');
-    document.getElementById('connLabel').value = '';
-    document.getElementById('connEmail').value = '';
-    document.getElementById('connPassword').value = '';
-    loadConnections();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-  });
-}
-
-function toggleGuide(id, btn) {
-  var el = document.getElementById(id);
-  el.classList.toggle('open');
-  btn.innerHTML = (el.classList.contains('open') ? '&#9652; ' : '&#9662; ') + btn.textContent.replace(/^[▲▼][ \t]*/, '');
-}
-
-/* ============================
-   2. SCAN HISTORY
-   ============================ */
-function loadScans() {
-  apiGet('/scans').then(function(data) {
-    var jobs = data.jobs || [];
-    var el = document.getElementById('scansList');
-    if (!jobs.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No scans yet.</p></div>'; return; }
-    el.innerHTML = jobs.map(function(j) {
-      var stClass = 'badge-neutral';
-      if (j.status === 'completed' || j.status === 'success') stClass = 'badge-success';
-      else if (j.status === 'failed' || j.status === 'error') stClass = 'badge-error';
-      else if (j.status === 'running' || j.status === 'in_progress') stClass = 'badge-warning';
-      return '<div class="item-row">' +
-        '<div class="item-main">' +
-          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
-            '<span class="badge ' + stClass + '">' + esc(j.status || 'unknown') + '</span>' +
-            '<span style="font-size:.82rem;color:var(--text-dim)">' + fmtDate(j.created_at || j.started_at) + '</span>' +
-          '</div>' +
-          '<div class="item-meta">' +
-            '<span>Emails found: <strong>' + (j.emails_found || 0) + '</strong></span>' +
-            '<span>Analyzed: <strong>' + (j.emails_analyzed || 0) + '</strong></span>' +
-          '</div>' +
-          (j.error ? '<div style="margin-top:6px;font-size:.78rem;color:var(--red);font-family:var(--mono)">' + esc(j.error) + '</div>' : '') +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }).catch(function() {
-    document.getElementById('scansList').innerHTML = '<div class="empty-state"><p>Failed to load scan history.</p></div>';
-  });
-}
-
-/* ============================
-   3. TEAM
-   ============================ */
-function loadTeam() {
-  loadMembers();
-  loadInvites();
-}
-
-function loadMembers() {
-  apiGet('/team').then(function(data) {
-    var members = data.members || [];
-    var el = document.getElementById('membersList');
-    if (!members.length) { el.innerHTML = '<div class="empty-state"><p>No team members.</p></div>'; return; }
-    el.innerHTML = members.map(function(m) {
-      var initial = (m.username || m.email || '?').charAt(0).toUpperCase();
-      return '<div class="item-row">' +
-        '<div class="avatar">' + initial + '</div>' +
-        '<div class="item-main">' +
-          '<div style="font-weight:600;font-size:.92rem">' + esc(m.username || 'User') + '</div>' +
-          '<div style="font-size:.78rem;color:var(--text-muted)">' + esc(m.email || '') + '</div>' +
-        '</div>' +
-        '<span class="badge badge-info">' + esc(m.role || 'member') + '</span>' +
-        '<div class="item-actions">' +
-          '<button class="btn btn-sm btn-danger" onclick="removeMember(\'' + m.id + '\', this)">Remove</button>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }).catch(function() {
-    document.getElementById('membersList').innerHTML = '<div class="empty-state"><p>Failed to load members.</p></div>';
-  });
-}
-
-function loadInvites() {
-  apiGet('/invites').then(function(data) {
-    var invites = data.invites || [];
-    var el = document.getElementById('invitesList');
-    if (!invites.length) { el.innerHTML = '<div class="empty-state"><p>No pending invites.</p></div>'; return; }
-    el.innerHTML = invites.map(function(inv) {
-      return '<div class="item-row">' +
-        '<div class="item-main">' +
-          '<div style="font-weight:500;font-size:.9rem">' + esc(inv.email) + '</div>' +
-          '<div class="item-meta">' +
-            '<span>Role: ' + esc(inv.role || 'member') + '</span>' +
-            '<span>Invited: ' + fmtDate(inv.created_at) + '</span>' +
-          '</div>' +
-        '</div>' +
-        '<div class="item-actions">' +
-          (inv.invite_link ? '<button class="btn btn-sm btn-secondary" onclick="copyInviteLink(\'' + esc(inv.invite_link) + '\', this)">Copy Link</button>' : '') +
-          '<button class="btn btn-sm btn-danger" onclick="revokeInvite(\'' + inv.id + '\', this)">Revoke</button>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }).catch(function() {
-    document.getElementById('invitesList').innerHTML = '<div class="empty-state"><p>Failed to load invites.</p></div>';
-  });
-}
-
-function sendInvite() {
-  var email = document.getElementById('inviteEmail').value;
-  var role = document.getElementById('inviteRole').value;
-  if (!email) { toast('Enter an email address', 'error'); return; }
-  apiPost('/invites', {email: email, role: role}).then(function() {
-    toast('Invite sent!');
-    document.getElementById('inviteEmail').value = '';
-    loadInvites();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-  });
-}
-
-function copyInviteLink(link, btn) {
-  navigator.clipboard.writeText(link).then(function() {
-    toast('Link copied!');
-  }).catch(function() {
-    toast('Failed to copy', 'error');
-  });
-}
-
-function revokeInvite(id, btn) {
-  if (!confirm('Revoke this invite?')) return;
-  btn.disabled = true;
-  apiDel('/invites/' + id).then(function() {
-    toast('Invite revoked');
-    loadInvites();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-    btn.disabled = false;
-  });
-}
-
-function removeMember(id, btn) {
-  if (!confirm('Remove this team member?')) return;
-  btn.disabled = true;
-  apiDel('/team/' + id).then(function() {
-    toast('Member removed');
-    loadMembers();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-    btn.disabled = false;
-  });
-}
-
-/* ============================
-   4. REPORTS
-   ============================ */
-function loadReports() {
-  apiGet('/report-schedule').then(function(data) {
-    var el = document.getElementById('reportsContent');
-    el.innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<span style="font-weight:500">Enabled</span>' +
-          '<label class="toggle"><input type="checkbox" id="reportEnabled" ' + (data.enabled ? 'checked' : '') + '><span class="toggle-slider"></span></label>' +
-        '</div>' +
-        '<button class="btn btn-primary" onclick="saveReports()">Save</button>' +
-      '</div>' +
-      '<div class="form-row">' +
-        '<div class="form-group"><label class="form-label">Frequency</label>' +
-          '<select class="form-select" id="reportFreq">' +
-            '<option value="weekly"' + (data.frequency === 'weekly' ? ' selected' : '') + '>Weekly</option>' +
-            '<option value="monthly"' + (data.frequency === 'monthly' ? ' selected' : '') + '>Monthly</option>' +
-          '</select></div>' +
-        '<div class="form-group"><label class="form-label">Recipients (comma separated)</label>' +
-          '<input type="text" class="form-input" id="reportRecipients" value="' + esc((data.recipients || []).join(', ')) + '" placeholder="email1@example.com, email2@example.com"></div>' +
-      '</div>' +
-      '<div style="margin-top:14px">' +
-        '<button class="btn btn-secondary" onclick="downloadTestReport()">Download Test Report</button>' +
-      '</div>';
-  }).catch(function() {
-    document.getElementById('reportsContent').innerHTML = '<div class="empty-state"><p>Failed to load report settings.</p></div>';
-  });
-}
-
-function saveReports() {
-  var enabled = document.getElementById('reportEnabled').checked;
-  var frequency = document.getElementById('reportFreq').value;
-  var recipientsRaw = document.getElementById('reportRecipients').value;
-  var recipients = recipientsRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-  apiPost('/report-schedule', {enabled: enabled, frequency: frequency, recipients: recipients}).then(function() {
-    toast('Report settings saved');
-  }).catch(function(e) {
-    toast(e.message, 'error');
-  });
-}
-
-function downloadTestReport() {
-  toast('Generating test report...');
-  fetch('/api/v1/report-schedule/test', {
-    method: 'POST',
-    headers: {'Authorization': 'Bearer ' + getToken()}
-  }).then(function(r) {
-    if (!r.ok) throw new Error('Failed to generate report');
-    return r.blob();
-  }).then(function(blob) {
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'sentinel-report.pdf';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast('Report downloaded');
-  }).catch(function(e) {
-    toast(e.message, 'error');
-  });
-}
-
-/* ============================
-   5. BRANDING
-   ============================ */
-function loadBranding() {
-  apiGet('/branding').then(function(data) {
-    document.getElementById('brandingContent').innerHTML =
-      '<div class="form-group"><label class="form-label">Organization Display Name</label>' +
-        '<input type="text" class="form-input" id="brandName" value="' + esc(data.org_display_name || '') + '" placeholder="Your Organization"></div>' +
-      '<div class="form-group"><label class="form-label">Logo URL</label>' +
-        '<input type="text" class="form-input" id="brandLogo" value="' + esc(data.logo_url || '') + '" placeholder="https://example.com/logo.png" oninput="updateBrandingPreview()"></div>' +
-      '<div class="form-row">' +
-        '<div class="form-group"><label class="form-label">Primary Color</label>' +
-          '<div class="color-input-wrap"><input type="color" id="brandPrimary" value="' + esc(data.primary_color || '#dc2626') + '" onchange="document.getElementById(\'brandPrimaryText\').value=this.value;updateBrandingPreview()"><input type="text" class="form-input" id="brandPrimaryText" value="' + esc(data.primary_color || '#dc2626') + '" oninput="document.getElementById(\'brandPrimary\').value=this.value;updateBrandingPreview()"></div></div>' +
-        '<div class="form-group"><label class="form-label">Secondary Color</label>' +
-          '<div class="color-input-wrap"><input type="color" id="brandSecondary" value="' + esc(data.secondary_color || '#111111') + '" onchange="document.getElementById(\'brandSecondaryText\').value=this.value;updateBrandingPreview()"><input type="text" class="form-input" id="brandSecondaryText" value="' + esc(data.secondary_color || '#111111') + '" oninput="document.getElementById(\'brandSecondary\').value=this.value;updateBrandingPreview()"></div></div>' +
-      '</div>' +
-      '<div class="form-group"><label class="form-label">Custom CSS</label>' +
-        '<textarea class="form-textarea" id="brandCSS" rows="5" placeholder="/* Custom CSS overrides */">' + esc(data.custom_css || '') + '</textarea></div>' +
-      '<div style="display:flex;gap:8px">' +
-        '<button class="btn btn-primary" onclick="saveBranding()">Save</button>' +
-        '<button class="btn btn-secondary" onclick="resetBranding()">Reset</button>' +
-      '</div>';
-    updateBrandingPreview();
-  }).catch(function() {
-    document.getElementById('brandingContent').innerHTML = '<div class="empty-state"><p>Failed to load branding settings.</p></div>';
-  });
-}
-
-function updateBrandingPreview() {
-  var logo = document.getElementById('brandLogo');
-  var card = document.getElementById('brandingPreviewCard');
-  var preview = document.getElementById('brandingPreview');
-  if (!logo) return;
-  var logoVal = logo.value;
-  if (logoVal) {
-    card.style.display = 'block';
-    var name = document.getElementById('brandName') ? document.getElementById('brandName').value : '';
-    var primary = document.getElementById('brandPrimaryText') ? document.getElementById('brandPrimaryText').value : '#dc2626';
-    var secondary = document.getElementById('brandSecondaryText') ? document.getElementById('brandSecondaryText').value : '#111';
-    preview.style.background = secondary;
-    preview.innerHTML = '<img src="' + esc(logoVal) + '" style="height:40px;max-width:160px;object-fit:contain" onerror="this.style.display=\'none\'">' +
-      '<span style="font-weight:700;font-size:1.1rem;color:' + esc(primary) + '">' + esc(name || 'Your Org') + '</span>';
-  } else {
-    card.style.display = 'none';
+  function apiPost(path,body){
+    return fetch("/api/v1"+path, {method:"POST",headers:{"Authorization":"Bearer "+getToken(),"Content-Type":"application/json"},body:JSON.stringify(body)})
+      .then(function(r){ if(r.status===401){logout();throw new Error("expired")} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||"Failed")}); return r.json(); });
   }
-}
+  function apiDel(path){
+    return fetch("/api/v1"+path, {method:"DELETE",headers:{"Authorization":"Bearer "+getToken()}})
+      .then(function(r){ if(r.status===401){logout();throw new Error("expired")} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||"Failed")}); return r.json(); });
+  }
+  function apiPatch(path,body){
+    return fetch("/api/v1"+path, {method:"PATCH",headers:{"Authorization":"Bearer "+getToken(),"Content-Type":"application/json"},body:JSON.stringify(body)})
+      .then(function(r){ if(r.status===401){logout();throw new Error("expired")} if(!r.ok) return r.json().then(function(d){throw new Error(d.detail||"Failed")}); return r.json(); });
+  }
 
-function saveBranding() {
-  var data = {
-    org_display_name: document.getElementById('brandName').value,
-    logo_url: document.getElementById('brandLogo').value,
-    primary_color: document.getElementById('brandPrimaryText').value,
-    secondary_color: document.getElementById('brandSecondaryText').value,
-    custom_css: document.getElementById('brandCSS').value
-  };
-  apiPost('/branding', data).then(function() {
-    toast('Branding saved');
-  }).catch(function(e) {
-    toast(e.message, 'error');
+  var loaded = {};
+  var tabBtns = document.querySelectorAll(".tab-btn");
+  var panels = document.querySelectorAll(".panel");
+
+  tabBtns.forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var tab = btn.dataset.tab;
+      tabBtns.forEach(function(b){b.classList.remove("active")});
+      btn.classList.add("active");
+      panels.forEach(function(p){p.classList.remove("active")});
+      document.getElementById("panel-"+tab).classList.add("active");
+      if(!loaded[tab]){ loaded[tab]=true; loadTab(tab); }
+    });
   });
-}
 
-function resetBranding() {
-  if (!confirm('Reset branding to defaults?')) return;
-  apiPost('/branding', {org_display_name: '', logo_url: '', primary_color: '#dc2626', secondary_color: '#111111', custom_css: ''}).then(function() {
-    toast('Branding reset');
-    loadBranding();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-  });
-}
-
-/* ============================
-   6. RULES
-   ============================ */
-function loadRules() {
-  apiGet('/rules').then(function(data) {
-    var rules = data.rules || [];
-    var el = document.getElementById('rulesList');
-    if (!rules.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚡</div><p>No custom rules yet. Create one above.</p></div>'; return; }
-    el.innerHTML = rules.map(function(r) {
-      var typeClass = r.rule_type === 'regex' ? 'badge-purple' : r.rule_type === 'domain' ? 'badge-info' : 'badge-neutral';
-      var actClass = r.action === 'block' ? 'badge-error' : r.action === 'whitelist' ? 'badge-success' : 'badge-warning';
-      return '<div class="item-row">' +
-        '<div class="item-main">' +
-          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">' +
-            '<span style="font-weight:600;font-size:.92rem">' + esc(r.name) + '</span>' +
-            '<span class="badge ' + typeClass + '">' + esc(r.rule_type) + '</span>' +
-            '<span class="badge ' + actClass + '">' + esc(r.action) + '</span>' +
-          '</div>' +
-          '<div style="font-family:var(--mono);font-size:.82rem;color:var(--text-muted)">' + esc(r.pattern) + '</div>' +
-          (r.description ? '<div style="font-size:.78rem;color:var(--text-muted);margin-top:2px">' + esc(r.description) + '</div>' : '') +
-        '</div>' +
-        '<div class="item-actions" style="gap:10px">' +
-          '<label class="toggle"><input type="checkbox" ' + (r.enabled !== false ? 'checked' : '') + ' onchange="toggleRule(\'' + r.id + '\', this.checked)"><span class="toggle-slider"></span></label>' +
-          '<button class="btn btn-sm btn-danger" onclick="deleteRule(\'' + r.id + '\', this)">Delete</button>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }).catch(function() {
-    document.getElementById('rulesList').innerHTML = '<div class="empty-state"><p>Failed to load rules.</p></div>';
-  });
-}
-
-function createRule() {
-  var data = {
-    name: document.getElementById('ruleName').value,
-    pattern: document.getElementById('rulePattern').value,
-    rule_type: document.getElementById('ruleType').value,
-    action: document.getElementById('ruleAction').value,
-    description: document.getElementById('ruleDesc').value
-  };
-  if (!data.name || !data.pattern) { toast('Name and pattern are required', 'error'); return; }
-  apiPost('/rules', data).then(function() {
-    toast('Rule created');
-    document.getElementById('ruleName').value = '';
-    document.getElementById('rulePattern').value = '';
-    document.getElementById('ruleDesc').value = '';
-    loadRules();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-  });
-}
-
-function toggleRule(id, enabled) {
-  apiPatch('/rules/' + id + '/toggle', {enabled: enabled}).then(function() {
-    toast('Rule ' + (enabled ? 'enabled' : 'disabled'));
-  }).catch(function(e) {
-    toast(e.message, 'error');
-    loadRules();
-  });
-}
-
-function deleteRule(id, btn) {
-  if (!confirm('Delete this rule?')) return;
-  btn.disabled = true;
-  apiDel('/rules/' + id).then(function() {
-    toast('Rule deleted');
-    loadRules();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-    btn.disabled = false;
-  });
-}
-
-function testRules() {
-  var text = document.getElementById('ruleTestInput').value;
-  if (!text) { toast('Enter text to test', 'error'); return; }
-  var results = document.getElementById('ruleTestResults');
-  results.style.display = 'block';
-  results.textContent = 'Testing...';
-  apiPost('/rules/check', {text: text}).then(function(data) {
-    if (data.matches && data.matches.length) {
-      results.innerHTML = '<strong style="color:var(--red)">' + data.matches.length + ' rule(s) matched:</strong>\n\n' +
-        data.matches.map(function(m) {
-          return '→ ' + esc(m.name || 'Rule') + ' (' + esc(m.action || 'flag') + ')\n  Pattern: ' + esc(m.pattern || '');
-        }).join('\n\n');
-    } else {
-      results.textContent = 'No rules matched this text.';
+  function loadTab(tab){
+    switch(tab){
+      case "connections": loadConnections(); break;
+      case "scans": loadScans(); break;
+      case "team": loadTeam(); loadInvites(); break;
+      case "reports": loadReports(); break;
+      case "branding": loadBranding(); break;
+      case "rules": loadRules(); break;
+      case "alerts": loadAlerts(); break;
+      case "intel": loadIntel(); break;
+      case "simulations": loadSimulations(); break;
     }
-  }).catch(function(e) {
-    results.textContent = 'Error: ' + e.message;
-  });
-}
-
-/* ============================
-   7. ALERTS
-   ============================ */
-function loadAlerts() {
-  apiGet('/alerts/config').then(function(data) {
-    var el = document.getElementById('alertsContent');
-    el.innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<span style="font-weight:500">Alerts Enabled</span>' +
-          '<label class="toggle"><input type="checkbox" id="alertEnabled" ' + (data.enabled ? 'checked' : '') + '><span class="toggle-slider"></span></label>' +
-        '</div>' +
-        '<div style="display:flex;gap:8px">' +
-          '<button class="btn btn-secondary" onclick="testAlert()">Test</button>' +
-          '<button class="btn btn-primary" onclick="saveAlerts()">Save</button>' +
-        '</div>' +
-      '</div>' +
-      '<div class="form-row">' +
-        '<div class="form-group"><label class="form-label">Platform</label>' +
-          '<select class="form-select" id="alertPlatform" onchange="updateAlertHelper()">' +
-            '<option value="slack"' + (data.platform === 'slack' ? ' selected' : '') + '>Slack</option>' +
-            '<option value="discord"' + (data.platform === 'discord' ? ' selected' : '') + '>Discord</option>' +
-            '<option value="teams"' + (data.platform === 'teams' ? ' selected' : '') + '>Microsoft Teams</option>' +
-          '</select></div>' +
-        '<div class="form-group"><label class="form-label">Alert Level</label>' +
-          '<select class="form-select" id="alertLevel">' +
-            '<option value="malicious"' + (data.alert_level === 'malicious' ? ' selected' : '') + '>Malicious Only</option>' +
-            '<option value="suspicious"' + (data.alert_level === 'suspicious' ? ' selected' : '') + '>Suspicious & Above</option>' +
-          '</select></div>' +
-      '</div>' +
-      '<div class="form-group"><label class="form-label">Webhook URL</label>' +
-        '<input type="text" class="form-input" id="alertWebhook" value="' + esc(data.webhook_url || '') + '" placeholder="https://hooks.slack.com/..."></div>' +
-      '<div class="form-hint" id="alertHelper">For Slack: create an Incoming Webhook in your Slack workspace settings.</div>';
-  }).catch(function() {
-    document.getElementById('alertsContent').innerHTML = '<div class="empty-state"><p>Failed to load alert settings.</p></div>';
-  });
-}
-
-function updateAlertHelper() {
-  var platform = document.getElementById('alertPlatform').value;
-  var el = document.getElementById('alertHelper');
-  var input = document.getElementById('alertWebhook');
-  if (platform === 'slack') {
-    el.textContent = 'For Slack: create an Incoming Webhook in your Slack workspace apps settings.';
-    input.placeholder = 'https://hooks.slack.com/services/...';
-  } else if (platform === 'discord') {
-    el.textContent = 'For Discord: go to Server Settings > Integrations > Webhooks, create one and copy the URL.';
-    input.placeholder = 'https://discord.com/api/webhooks/...';
-  } else if (platform === 'teams') {
-    el.textContent = 'For Teams: create an Incoming Webhook connector in your Teams channel.';
-    input.placeholder = 'https://outlook.office.com/webhook/...';
   }
-}
 
-function saveAlerts() {
-  var data = {
-    enabled: document.getElementById('alertEnabled').checked,
-    platform: document.getElementById('alertPlatform').value,
-    alert_level: document.getElementById('alertLevel').value,
-    webhook_url: document.getElementById('alertWebhook').value
+  function showToast(msg, type){
+    var c = document.getElementById("toast-container");
+    var t = document.createElement("div");
+    t.className = "toast toast-" + (type||"success");
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(function(){ t.style.opacity="0"; t.style.transition="opacity .3s"; setTimeout(function(){t.remove()},300); }, 3500);
+  }
+
+  function setLoading(el, msg){
+    el.innerHTML = '<div class="loading-center"><div class="spinner"></div>' + (msg||"Loading...") + '</div>';
+  }
+
+  function formatDate(d){
+    if(!d) return "--";
+    var dt = new Date(d);
+    return dt.toLocaleDateString() + " " + dt.toLocaleTimeString();
+  }
+
+  function statusBadge(s){
+    var map = {completed:"green",success:"green",running:"blue",active:"blue",pending:"yellow",failed:"red",error:"red",disabled:"gray",sent:"blue",ended:"gray",revoked:"red",pending_invite:"yellow"};
+    return '<span class="badge badge-'+(map[s]||"gray")+'">'+escHtml(s||"unknown")+'</span>';
+  }
+
+  function escHtml(s){
+    var d=document.createElement("div");d.textContent=s;return d.innerHTML;
+  }
+
+  function escapeAttr(s){
+    return s.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  // CONNECTIONS
+  function loadConnections(){
+    var el = document.getElementById("connections-list");
+    setLoading(el);
+    apiGet("/connections").then(function(d){
+      var list = d.connections || [];
+      if(!list.length){ el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">[ ]</div><div class="empty-state-text">No email connections yet. Add one to get started.</div></div>'; return; }
+      var h = "";
+      list.forEach(function(c){
+        h += '<div class="conn-item">';
+        h += '<div class="conn-dot '+(c.status==="active"?"online":"offline")+'"></div>';
+        h += '<div class="conn-info">';
+        h += '<div class="conn-label">'+escHtml(c.label||"Unnamed")+'</div>';
+        h += '<div class="conn-detail">'+escHtml(c.imap_username||"")+' @ '+escHtml(c.imap_host||"")+':'+escHtml(String(c.imap_port||""))+'</div>';
+        h += '<div style="font-size:11px;color:var(--dim);margin-top:2px">Last scan: '+formatDate(c.last_scan)+' &middot; Folder: '+escHtml(c.folder||"INBOX")+' &middot; Interval: every '+escHtml(String(c.scan_interval||6))+'h</div>';
+        h += '</div>';
+        h += '<div class="conn-actions">';
+        h += '<button class="btn btn-sm btn-green" data-action="scan-now" data-id="'+escapeAttr(c.id)+'">Scan Now</button>';
+        h += '<button class="btn btn-sm" style="color:var(--red)" data-action="remove-connection" data-id="'+escapeAttr(c.id)+'">Remove</button>';
+        h += '</div>';
+        h += '</div>';
+      });
+      el.innerHTML = h;
+    }).catch(function(e){ el.innerHTML = '<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
+  }
+
+  var providerPresets = {
+    gmail: {host:"imap.gmail.com",port:993},
+    outlook: {host:"outlook.office365.com",port:993},
+    yahoo: {host:"imap.mail.yahoo.com",port:993},
+    custom: {host:"",port:993}
   };
-  apiPost('/alerts/config', data).then(function() {
-    toast('Alert settings saved');
-  }).catch(function(e) {
-    toast(e.message, 'error');
+
+  document.getElementById("conn-provider").addEventListener("change", function(){
+    var p = providerPresets[this.value];
+    document.getElementById("conn-host").value = p.host;
+    document.getElementById("conn-port").value = p.port;
   });
-}
 
-function testAlert() {
-  apiPost('/alerts/test', {}).then(function() {
-    toast('Test alert sent!');
-  }).catch(function(e) {
-    toast(e.message, 'error');
+  document.getElementById("guide-gmail-header").addEventListener("click", function(){
+    this.classList.toggle("open");
+    document.getElementById("guide-gmail-body").classList.toggle("open");
   });
-}
-
-/* ============================
-   8. INTEL
-   ============================ */
-function loadIntel() {
-  loadIntelStats();
-  loadIntelFeed();
-}
-
-function loadIntelStats() {
-  apiGet('/intel/stats').then(function(data) {
-    var bt = data.by_type || {};
-    document.getElementById('intelStatsGrid').innerHTML =
-      '<div class="stat-card"><div class="stat-value">' + (data.total_indicators || 0) + '</div><div class="stat-label">Total Indicators</div></div>' +
-      '<div class="stat-card"><div class="stat-value">' + (data.verified || 0) + '</div><div class="stat-label">Verified</div></div>' +
-      '<div class="stat-card"><div class="stat-value">' + (bt.domain || 0) + '</div><div class="stat-label">Domains</div></div>' +
-      '<div class="stat-card"><div class="stat-value">' + (bt.url || 0) + '</div><div class="stat-label">URLs</div></div>';
-  }).catch(function() {
-    document.getElementById('intelStatsGrid').innerHTML = '';
+  document.getElementById("guide-outlook-header").addEventListener("click", function(){
+    this.classList.toggle("open");
+    document.getElementById("guide-outlook-body").classList.toggle("open");
   });
-}
 
-function loadIntelFeed() {
-  apiGet('/intel').then(function(data) {
-    var items = data.items || [];
-    var el = document.getElementById('intelFeedList');
-    if (!items.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">🧠</div><p>No threat indicators yet. Submit one above.</p></div>'; return; }
-    el.innerHTML = items.map(function(item) {
-      var tc = 'badge-neutral';
-      if (item.indicator_type === 'domain') tc = 'badge-info';
-      else if (item.indicator_type === 'url') tc = 'badge-purple';
-      else if (item.indicator_type === 'ip') tc = 'badge-warning';
-      else if (item.indicator_type === 'hash') tc = 'badge-error';
-      return '<div class="item-row">' +
-        '<div class="item-main">' +
-          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px">' +
-            '<span class="badge ' + tc + '">' + esc(item.indicator_type || 'unknown') + '</span>' +
-            '<span style="font-family:var(--mono);font-size:.88rem;word-break:break-all">' + esc(item.indicator) + '</span>' +
-            (item.verified ? '<span class="badge badge-success">Verified</span>' : '') +
-          '</div>' +
-          '<div class="item-meta">' +
-            '<span>Reports: <strong>' + (item.report_count || 0) + '</strong></span>' +
-            '<span>Category: ' + esc(item.category || '—') + '</span>' +
-            '<span>' + fmtDate(item.created_at) + '</span>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }).catch(function() {
-    document.getElementById('intelFeedList').innerHTML = '<div class="empty-state"><p>Failed to load intel feed.</p></div>';
+  document.getElementById("add-connection-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var fd = new FormData(this);
+    var body = {};
+    fd.forEach(function(v,k){ body[k]=v; });
+    body.imap_port = parseInt(body.imap_port)||993;
+    body.scan_interval = parseInt(body.scan_interval)||6;
+    apiPost("/connections", body).then(function(){
+      showToast("Connection added successfully");
+      document.getElementById("modal-add-connection").classList.remove("open");
+      document.getElementById("add-connection-form").reset();
+      document.getElementById("conn-host").value="imap.gmail.com";
+      document.getElementById("conn-port").value="993";
+      loadConnections();
+    }).catch(function(e){ showToast(e.message, "error"); });
   });
-}
 
-function submitIntel() {
-  var data = {
-    indicator: document.getElementById('intelIndicator').value,
-    indicator_type: document.getElementById('intelType').value,
-    category: document.getElementById('intelCategory').value
-  };
-  if (!data.indicator) { toast('Enter an indicator', 'error'); return; }
-  apiPost('/intel', data).then(function() {
-    toast('Indicator submitted');
-    document.getElementById('intelIndicator').value = '';
-    loadIntelStats();
-    loadIntelFeed();
-  }).catch(function(e) {
-    toast(e.message, 'error');
+  // SCANS
+  function loadScans(){
+    var el = document.getElementById("scans-list");
+    setLoading(el);
+    apiGet("/scans").then(function(d){
+      var list = d.jobs || [];
+      if(!list.length){ el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">[S]</div><div class="empty-state-text">No scans have been run yet.</div></div>'; return; }
+      var h = "";
+      list.forEach(function(s){
+        h += '<div class="scan-item">';
+        h += '<div class="scan-top">';
+        h += statusBadge(s.status);
+        h += '<span style="font-size:12px;color:var(--dim)">'+formatDate(s.created_at)+'</span>';
+        h += '</div>';
+        h += '<div class="scan-stats">';
+        h += '<span>Emails found: <b>'+escHtml(String(s.emails_found||0))+'</b></span>';
+        h += '<span>Analyzed: <b>'+escHtml(String(s.emails_analyzed||0))+'</b></span>';
+        if(s.error){ h += '<span style="color:var(--red)">Error: '+escHtml(s.error)+'</span>'; }
+        h += '</div>';
+        h += '</div>';
+      });
+      el.innerHTML = h;
+    }).catch(function(e){ el.innerHTML = '<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
+  }
+
+  // TEAM
+  function loadTeam(){
+    var el = document.getElementById("team-members");
+    setLoading(el);
+    apiGet("/team").then(function(d){
+      var list = d.members || [];
+      if(!list.length){ el.innerHTML = '<div class="empty-state"><div class="empty-state-text">No team members.</div></div>'; return; }
+      var h = "";
+      list.forEach(function(m){
+        var initial = (m.username||m.email||"?").charAt(0).toUpperCase();
+        h += '<div class="member-item">';
+        h += '<div class="member-avatar">'+escHtml(initial)+'</div>';
+        h += '<div class="member-info">';
+        h += '<div class="member-name">'+escHtml(m.username||"Unknown")+'</div>';
+        h += '<div class="member-email">'+escHtml(m.email||"")+'</div>';
+        h += '<div class="member-role">Role: '+escHtml(m.role||"member")+'</div>';
+        h += '</div>';
+        h += '<button class="btn btn-sm" style="color:var(--red)" data-action="remove-member" data-id="'+escapeAttr(m.id)+'">Remove</button>';
+        h += '</div>';
+      });
+      el.innerHTML = h;
+    }).catch(function(e){ el.innerHTML = '<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
+  }
+
+  function loadInvites(){
+    var el = document.getElementById("team-invites");
+    setLoading(el);
+    apiGet("/invites").then(function(d){
+      var list = d.invites || [];
+      if(!list.length){ el.innerHTML = '<div class="empty-state"><div class="empty-state-text">No pending invites.</div></div>'; return; }
+      var h = "";
+      list.forEach(function(inv){
+        h += '<div class="invite-item">';
+        h += '<div class="conn-info">';
+        h += '<div class="conn-label">'+escHtml(inv.email)+'</div>';
+        h += '<div class="conn-detail">Role: '+escHtml(inv.role||"member")+' &middot; '+statusBadge(inv.status||"pending_invite")+'</div>';
+        if(inv.invite_link){ h += '<div style="margin-top:4px"><button class="btn btn-sm" data-action="copy-invite" data-link="'+escapeAttr(inv.invite_link)+'">Copy Invite Link</button></div>'; }
+        h += '</div>';
+        h += '<button class="btn btn-sm" style="color:var(--red)" data-action="revoke-invite" data-id="'+escapeAttr(inv.id)+'">Revoke</button>';
+        h += '</div>';
+      });
+      el.innerHTML = h;
+    }).catch(function(e){ el.innerHTML = '<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
+  }
+
+  document.getElementById("invite-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var fd = new FormData(this);
+    var body = {email:fd.get("email"), role:fd.get("role")};
+    apiPost("/invites", body).then(function(){
+      showToast("Invite sent");
+      document.getElementById("invite-form").reset();
+      loadInvites();
+    }).catch(function(e){ showToast(e.message, "error"); });
   });
-}
 
-/* ============================
-   9. SIMULATIONS
-   ============================ */
-function loadSimulations() {
-  apiGet('/simulations').then(function(data) {
-    var sims = data.simulations || [];
-    var el = document.getElementById('simList');
-    if (!sims.length) { el.innerHTML = '<div class="empty-state"><div class="empty-icon">🎯</div><p>No simulations yet. Create one above.</p></div>'; return; }
-    el.innerHTML = sims.map(function(s) {
-      var sc = 'badge-neutral';
-      if (s.status === 'completed') sc = 'badge-success';
-      else if (s.status === 'active' || s.status === 'running') sc = 'badge-warning';
-      else if (s.status === 'draft') sc = 'badge-info';
-      var statsHtml = '';
-      if (s.stats) {
-        statsHtml = '<div class="stats-grid" style="margin-top:12px;margin-bottom:0">' +
-          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.sent || 0) + '</div><div class="stat-label">Sent</div></div>' +
-          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.opened || 0) + '</div><div class="stat-label">Opened</div></div>' +
-          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.clicked || 0) + '</div><div class="stat-label">Clicked</div></div>' +
-          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.credentials || 0) + '</div><div class="stat-label">Credentials</div></div>' +
-          '<div class="stat-card"><div class="stat-value" style="font-size:1.2rem">' + (s.stats.risk_score != null ? s.stats.risk_score : '—') + '</div><div class="stat-label">Risk Score</div></div>' +
-        '</div>';
+  // REPORTS
+  function loadReports(){
+    var el = document.getElementById("reports-content");
+    setLoading(el);
+    apiGet("/report-schedule").then(function(d){
+      var enabled = d.enabled || false;
+      var freq = d.frequency || "weekly";
+      var recipients = d.recipients || "";
+      var h = "";
+      h += '<div class="toggle-row">';
+      h += '<label>Enable Reports</label>';
+      h += '<label class="toggle-switch"><input type="checkbox" id="report-enabled"'+(enabled?" checked":"")+'><span class="slider"></span></label>';
+      h += '</div>';
+      h += '<div class="form-row">';
+      h += '<div class="form-group"><label class="label">Frequency</label><select class="input" id="report-freq"><option value="weekly"'+(freq==="weekly"?" selected":"")+'>Weekly</option><option value="monthly"'+(freq==="monthly"?" selected":"")+'>Monthly</option></select></div>';
+      h += '<div class="form-group"><label class="label">Recipients (comma separated)</label><input class="input" type="text" id="report-recipients" value="'+escHtml(recipients)+'" placeholder="user@example.com, admin@example.com"></div>';
+      h += '</div>';
+      h += '<div style="display:flex;gap:8px;margin-top:8px">';
+      h += '<button class="btn btn-red" data-action="save-reports">Save Schedule</button>';
+      h += '<button class="btn" data-action="test-report">Download Test Report</button>';
+      h += '</div>';
+      el.innerHTML = h;
+    }).catch(function(e){ el.innerHTML = '<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
+  }
+
+  // BRANDING
+  function loadBranding(){
+    apiGet("/branding").then(function(d){
+      var f = document.getElementById("branding-form");
+      if(d.org_display_name) f.elements["org_display_name"].value = d.org_display_name;
+      if(d.logo_url) f.elements["logo_url"].value = d.logo_url;
+      if(d.primary_color) f.elements["primary_color"].value = d.primary_color;
+      if(d.secondary_color) f.elements["secondary_color"].value = d.secondary_color;
+      if(d.custom_css) f.elements["custom_css"].value = d.custom_css;
+      document.getElementById("primary-color-val").textContent = d.primary_color || "#DC2626";
+      document.getElementById("secondary-color-val").textContent = d.secondary_color || "#111111";
+      updateBrandingPreview(d.logo_url);
+    }).catch(function(){});
+  }
+
+  document.getElementById("branding-form").querySelector('[name="primary_color"]').addEventListener("input", function(){
+    document.getElementById("primary-color-val").textContent = this.value;
+  });
+  document.getElementById("branding-form").querySelector('[name="secondary_color"]').addEventListener("input", function(){
+    document.getElementById("secondary-color-val").textContent = this.value;
+  });
+  document.getElementById("branding-form").querySelector('[name="logo_url"]').addEventListener("input", function(){
+    updateBrandingPreview(this.value);
+  });
+
+  function updateBrandingPreview(url){
+    var box = document.getElementById("branding-preview");
+    var img = document.getElementById("branding-preview-img");
+    if(url){ box.style.display="block"; img.src=url; }
+    else { box.style.display="none"; }
+  }
+
+  document.getElementById("branding-preview-img").addEventListener("error", function(){ this.remove(); });
+
+  document.getElementById("branding-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var fd = new FormData(this);
+    var body = {};
+    fd.forEach(function(v,k){ body[k]=v; });
+    apiPost("/branding", body).then(function(){
+      showToast("Branding saved");
+    }).catch(function(e){ showToast(e.message, "error"); });
+  });
+
+  // RULES
+  function loadRules(){
+    var el = document.getElementById("rules-list");
+    setLoading(el);
+    apiGet("/rules").then(function(d){
+      var list = d.rules || [];
+      if(!list.length){ el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">[L]</div><div class="empty-state-text">No detection rules configured yet.</div></div>'; return; }
+      var h = "";
+      list.forEach(function(r){
+        h += '<div class="rule-item">';
+        h += '<div class="rule-info">';
+        h += '<div class="rule-name">'+escHtml(r.name)+'</div>';
+        h += '<div class="rule-pattern">'+escHtml(r.pattern)+'</div>';
+        h += '<div class="rule-badges">';
+        h += '<span class="badge badge-blue">'+escHtml(r.rule_type||"keyword")+'</span>';
+        h += '<span class="badge badge-'+(r.action==="flag"?"yellow":r.action==="block"?"red":"green")+'">'+escHtml(r.action||"flag")+'</span>';
+        if(r.description){ h += '<span class="badge badge-gray">'+escHtml(r.description)+'</span>'; }
+        h += '</div>';
+        h += '</div>';
+        h += '<label class="rule-toggle"><input type="checkbox" data-action="toggle-rule" data-id="'+escapeAttr(r.id)+'"'+(r.enabled!==false?" checked":"")+'><span class="slider"></span></label>';
+        h += '<button class="btn btn-sm" style="color:var(--red)" data-action="delete-rule" data-id="'+escapeAttr(r.id)+'">Delete</button>';
+        h += '</div>';
+      });
+      el.innerHTML = h;
+    }).catch(function(e){ el.innerHTML = '<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
+  }
+
+  document.getElementById("rule-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var fd = new FormData(this);
+    var body = {};
+    fd.forEach(function(v,k){ body[k]=v; });
+    apiPost("/rules", body).then(function(){
+      showToast("Rule created");
+      document.getElementById("rule-form").reset();
+      loadRules();
+    }).catch(function(e){ showToast(e.message, "error"); });
+  });
+
+  // ALERTS
+  function loadAlerts(){
+    var el = document.getElementById("alerts-content");
+    setLoading(el);
+    apiGet("/alerts/config").then(function(d){
+      var enabled = d.enabled || false;
+      var platform = d.platform || "slack";
+      var alertLevel = d.alert_level || "malicious";
+      var webhook = d.webhook_url || "";
+      var h = "";
+      h += '<div class="toggle-row">';
+      h += '<label>Enable Alerts</label>';
+      h += '<label class="toggle-switch"><input type="checkbox" id="alert-enabled"'+(enabled?" checked":"")+'><span class="slider"></span></label>';
+      h += '</div>';
+      h += '<div class="form-row">';
+      h += '<div class="form-group"><label class="label">Platform</label><select class="input" id="alert-platform"><option value="slack"'+(platform==="slack"?" selected":"")+'>Slack</option><option value="discord"'+(platform==="discord"?" selected":"")+'>Discord</option><option value="teams"'+(platform==="teams"?" selected":"")+'>Microsoft Teams</option></select></div>';
+      h += '<div class="form-group"><label class="label">Alert Level</label><select class="input" id="alert-level"><option value="malicious"'+(alertLevel==="malicious"?" selected":"")+'>Malicious Only</option><option value="suspicious"'+(alertLevel==="suspicious"?" selected":"")+'>Suspicious and Above</option></select></div>';
+      h += '</div>';
+      h += '<div class="form-group"><label class="label">Webhook URL</label><input class="input" type="url" id="alert-webhook" value="'+escHtml(webhook)+'" placeholder="https://hooks.slack.com/services/..."></div>';
+      h += '<div style="display:flex;gap:8px;margin-top:8px">';
+      h += '<button class="btn btn-red" data-action="save-alerts">Save Config</button>';
+      h += '<button class="btn" data-action="test-alert">Send Test Alert</button>';
+      h += '</div>';
+      el.innerHTML = h;
+    }).catch(function(e){ el.innerHTML = '<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
+  }
+
+  // INTEL
+  function loadIntel(){
+    apiGet("/intel/stats").then(function(d){
+      var el = document.getElementById("intel-stats");
+      var bt = d.by_type || {};
+      var h = '<div class="stat-grid">';
+      h += '<div class="stat-card"><div class="stat-value">'+escHtml(String(d.total_indicators||0))+'</div><div class="stat-label">Total Indicators</div></div>';
+      h += '<div class="stat-card"><div class="stat-value">'+escHtml(String(d.verified||0))+'</div><div class="stat-label">Verified</div></div>';
+      h += '<div class="stat-card"><div class="stat-value">'+escHtml(String(bt.domain||0))+'</div><div class="stat-label">Domains</div></div>';
+      h += '<div class="stat-card"><div class="stat-value">'+escHtml(String(bt.url||0))+'</div><div class="stat-label">URLs</div></div>';
+      h += '</div>';
+      if(d.top_reported && d.top_reported.length){
+        h += '<div style="margin-top:4px"><div class="label" style="margin-bottom:8px">Top Reported</div>';
+        d.top_reported.forEach(function(t){ h += '<div style="font-size:13px;padding:4px 0;color:var(--dim)">'+escHtml(t.indicator||t)+'</div>'; });
+        h += '</div>';
       }
-      var actions = '';
-      if (s.status === 'draft') {
-        actions = '<button class="btn btn-sm btn-primary" onclick="sendSimulation(\'' + s.id + '\', this)">Send</button>';
-      } else if (s.status === 'active' || s.status === 'running') {
-        actions = '<button class="btn btn-sm btn-danger" onclick="endSimulation(\'' + s.id + '\', this)">End</button>';
-      }
-      return '<div class="card" style="margin-bottom:12px;border-color:var(--border)">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
-          '<div>' +
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">' +
-              '<span style="font-weight:600;font-size:.95rem">' + esc(s.name) + '</span>' +
-              '<span class="badge ' + sc + '">' + esc(s.status) + '</span>' +
-            '</div>' +
-            '<div class="item-meta">' +
-              '<span>Template: ' + esc(s.template_type || '—') + '</span>' +
-              '<span>Created: ' + fmtDate(s.created_at) + '</span>' +
-            '</div>' +
-          '</div>' +
-          '<div class="item-actions">' + actions + '</div>' +
-        '</div>' +
-        statsHtml +
-      '</div>';
-    }).join('');
-  }).catch(function() {
-    document.getElementById('simList').innerHTML = '<div class="empty-state"><p>Failed to load simulations.</p></div>';
-  });
-}
+      el.innerHTML = h;
+    }).catch(function(e){ document.getElementById("intel-stats").innerHTML='<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
 
-function createSimulation() {
-  var targetsRaw = document.getElementById('simTargets').value;
-  var targets = targetsRaw.split(',').map(function(s) { return parseInt(s.trim()); }).filter(function(n) { return !isNaN(n); });
-  var data = {
-    name: document.getElementById('simName').value,
-    template_type: document.getElementById('simTemplate').value,
-    target_user_ids: targets
-  };
-  if (!data.name) { toast('Enter a campaign name', 'error'); return; }
-  apiPost('/simulations', data).then(function() {
-    toast('Campaign created');
-    document.getElementById('simName').value = '';
-    document.getElementById('simTargets').value = '';
-    loadSimulations();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-  });
-}
+    var feedEl = document.getElementById("intel-feed");
+    setLoading(feedEl);
+    apiGet("/intel").then(function(d){
+      var list = d.items || [];
+      if(!list.length){ feedEl.innerHTML='<div class="empty-state"><div class="empty-state-text">No intel indicators yet.</div></div>'; return; }
+      var h = "";
+      list.forEach(function(item){
+        h += '<div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">';
+        h += '<div style="flex:1;min-width:0">';
+        h += '<div style="font-size:14px;font-family:var(--mono)">'+escHtml(item.indicator)+'</div>';
+        h += '<div style="margin-top:4px"><span class="badge badge-blue">'+escHtml(item.indicator_type||"")+'</span> <span class="badge badge-purple">'+escHtml(item.category||"")+'</span></div>';
+        h += '</div>';
+        h += '<span style="font-size:11px;color:var(--dim)">'+formatDate(item.created_at)+'</span>';
+        h += '</div>';
+      });
+      feedEl.innerHTML = h;
+    }).catch(function(e){ feedEl.innerHTML='<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
+  }
 
-function sendSimulation(id, btn) {
-  if (!confirm('Send this simulation to all targets?')) return;
-  btn.disabled = true;
-  apiPost('/simulations/' + id + '/send', {}).then(function() {
-    toast('Simulation sent');
-    loadSimulations();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-    btn.disabled = false;
+  document.getElementById("intel-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var fd = new FormData(this);
+    var body = {};
+    fd.forEach(function(v,k){ body[k]=v; });
+    apiPost("/intel", body).then(function(){
+      showToast("Indicator submitted");
+      document.getElementById("intel-form").reset();
+      loaded["intel"] = false;
+      loadIntel();
+    }).catch(function(e){ showToast(e.message, "error"); });
   });
-}
 
-function endSimulation(id, btn) {
-  if (!confirm('End this simulation?')) return;
-  btn.disabled = true;
-  apiPost('/simulations/' + id + '/end', {}).then(function() {
-    toast('Simulation ended');
-    loadSimulations();
-  }).catch(function(e) {
-    toast(e.message, 'error');
-    btn.disabled = false;
+  // SIMULATIONS
+  function loadSimulations(){
+    var el = document.getElementById("sim-list");
+    setLoading(el);
+    apiGet("/simulations").then(function(d){
+      var list = d.simulations || [];
+      if(!list.length){ el.innerHTML='<div class="empty-state"><div class="empty-state-icon">[X]</div><div class="empty-state-text">No simulations created yet.</div></div>'; return; }
+      var h = "";
+      list.forEach(function(s){
+        var stats = s.stats || {};
+        h += '<div class="sim-item">';
+        h += '<div class="sim-top">';
+        h += '<div style="flex:1">';
+        h += '<span style="font-weight:600;font-size:14px">'+escHtml(s.name)+'</span>';
+        h += ' '+statusBadge(s.status);
+        h += '</div>';
+        h += '<span style="font-size:12px;color:var(--dim)">'+formatDate(s.created_at)+'</span>';
+        h += '</div>';
+        h += '<div style="font-size:12px;color:var(--dim);margin-top:2px">Template: '+escHtml(s.template_type||"")+'</div>';
+        h += '<div class="sim-stats">';
+        h += '<span>Sent: <b>'+escHtml(String(stats.sent||0))+'</b></span>';
+        h += '<span>Opened: <b>'+escHtml(String(stats.opened||0))+'</b></span>';
+        h += '<span>Clicked: <b>'+escHtml(String(stats.clicked||0))+'</b></span>';
+        h += '<span>Credentials: <b>'+escHtml(String(stats.credentials||0))+'</b></span>';
+        if(stats.risk_score !== undefined){ h += '<span>Risk: <b style="color:var(--red)">'+escHtml(String(stats.risk_score))+'</b></span>'; }
+        h += '</div>';
+        h += '<div style="margin-top:8px;display:flex;gap:6px">';
+        if(s.status==="created"||s.status==="draft"){
+          h += '<button class="btn btn-sm btn-green" data-action="send-sim" data-id="'+escapeAttr(s.id)+'">Send</button>';
+        }
+        if(s.status==="sent"||s.status==="active"||s.status==="running"){
+          h += '<button class="btn btn-sm" style="color:var(--yellow)" data-action="end-sim" data-id="'+escapeAttr(s.id)+'">End</button>';
+        }
+        h += '</div>';
+        h += '</div>';
+      });
+      el.innerHTML = h;
+    }).catch(function(e){ el.innerHTML='<div class="empty-state" style="color:var(--red)">'+escHtml(e.message)+'</div>'; });
+  }
+
+  document.getElementById("sim-form").addEventListener("submit", function(e){
+    e.preventDefault();
+    var fd = new FormData(this);
+    var body = {};
+    fd.forEach(function(v,k){ body[k]=v; });
+    if(body.target_user_ids){
+      body.target_user_ids = body.target_user_ids.split(",").map(function(s){return s.trim()}).filter(Boolean);
+    }
+    apiPost("/simulations", body).then(function(){
+      showToast("Simulation created");
+      document.getElementById("sim-form").reset();
+      loadSimulations();
+    }).catch(function(e){ showToast(e.message, "error"); });
   });
-}
 
-/* ============================
-   INIT
-   ============================ */
-try {
-  loadedTabs['connections'] = true;
+  // EVENT DELEGATION
+  document.addEventListener("click", function(e){
+    var t = e.target.closest("[data-action]");
+    if(!t) return;
+    var action = t.dataset.action;
+    var id = t.dataset.id;
+
+    switch(action){
+      case "logout": logout(); break;
+      case "open-add-connection": document.getElementById("modal-add-connection").classList.add("open"); break;
+      case "close-modal": t.closest(".modal-overlay").classList.remove("open"); break;
+      case "scan-now":
+        showToast("Starting scan...");
+        apiPost("/scan/"+id, {}).then(function(){ showToast("Scan started"); }).catch(function(e){ showToast(e.message, "error"); });
+        break;
+      case "remove-connection":
+        if(confirm("Remove this connection?")){
+          apiDel("/connections/"+id).then(function(){ showToast("Connection removed"); loadConnections(); }).catch(function(e){ showToast(e.message, "error"); });
+        }
+        break;
+      case "save-reports":
+        var repBody = {
+          enabled: document.getElementById("report-enabled").checked,
+          frequency: document.getElementById("report-freq").value,
+          recipients: document.getElementById("report-recipients").value
+        };
+        apiPost("/report-schedule", repBody).then(function(){ showToast("Report schedule saved"); }).catch(function(e){ showToast(e.message, "error"); });
+        break;
+      case "test-report":
+        showToast("Generating test report...");
+        fetch("/api/v1/report-schedule/test", {method:"POST", headers:{"Authorization":"Bearer "+getToken()}}).then(function(r){
+          if(!r.ok) throw new Error("Failed");
+          return r.blob();
+        }).then(function(blob){
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          a.href = url;
+          a.download = "sentinel_test_report.pdf";
+          a.click();
+          URL.revokeObjectURL(url);
+          showToast("Report downloaded");
+        }).catch(function(e){ showToast("Failed to download report", "error"); });
+        break;
+      case "save-alerts":
+        var alertBody = {
+          enabled: document.getElementById("alert-enabled").checked,
+          platform: document.getElementById("alert-platform").value,
+          alert_level: document.getElementById("alert-level").value,
+          webhook_url: document.getElementById("alert-webhook").value
+        };
+        apiPost("/alerts/config", alertBody).then(function(){ showToast("Alert config saved"); }).catch(function(e){ showToast(e.message, "error"); });
+        break;
+      case "test-alert":
+        showToast("Sending test alert...");
+        apiPost("/alerts/test", {}).then(function(){ showToast("Test alert sent"); }).catch(function(e){ showToast(e.message, "error"); });
+        break;
+      case "copy-invite":
+        var link = t.dataset.link;
+        if(navigator.clipboard){ navigator.clipboard.writeText(link).then(function(){ showToast("Invite link copied"); }); }
+        else { var ta=document.createElement("textarea");ta.value=link;document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);showToast("Invite link copied"); }
+        break;
+      case "revoke-invite":
+        apiDel("/invites/"+id).then(function(){ showToast("Invite revoked"); loadInvites(); }).catch(function(e){ showToast(e.message, "error"); });
+        break;
+      case "remove-member":
+        if(confirm("Remove this team member?")){
+          apiDel("/team/"+id).then(function(){ showToast("Member removed"); loadTeam(); }).catch(function(e){ showToast(e.message, "error"); });
+        }
+        break;
+      case "delete-rule":
+        if(confirm("Delete this rule?")){
+          apiDel("/rules/"+id).then(function(){ showToast("Rule deleted"); loadRules(); }).catch(function(e){ showToast(e.message, "error"); });
+        }
+        break;
+      case "test-rules":
+        var text = document.getElementById("rule-test-input").value;
+        if(!text){ showToast("Enter text to test", "error"); return; }
+        var resEl = document.getElementById("rule-test-result");
+        resEl.innerHTML = '<div class="loading-center"><div class="spinner"></div>Testing...</div>';
+        apiPost("/rules/check", {text:text}).then(function(d){
+          var matches = d.matches || d.rules || [];
+          if(!matches.length){ resEl.innerHTML='<div style="padding:12px;color:var(--dim);font-size:13px">No rules matched.</div>'; return; }
+          var h = '<div style="margin-top:12px">';
+          matches.forEach(function(m){
+            h += '<div style="padding:8px 12px;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.2);border-radius:6px;margin-bottom:6px;font-size:13px">';
+            h += '<b>'+escHtml(m.name||"Rule")+'</b> &mdash; ';
+            h += '<span class="badge badge-'+(m.action==="flag"?"yellow":m.action==="block"?"red":"green")+'">'+escHtml(m.action||"")+'</span>';
+            if(m.description){ h += ' <span style="color:var(--dim)">'+escHtml(m.description)+'</span>'; }
+            h += '</div>';
+          });
+          h += '</div>';
+          resEl.innerHTML = h;
+        }).catch(function(e){ resEl.innerHTML='<div style="padding:12px;color:var(--red);font-size:13px">'+escHtml(e.message)+'</div>'; });
+        break;
+      case "reset-branding":
+        if(confirm("Reset branding to defaults?")){
+          apiPost("/branding", {org_display_name:"",logo_url:"",primary_color:"#DC2626",secondary_color:"#111111",custom_css:""}).then(function(){
+            showToast("Branding reset");
+            loadBranding();
+          }).catch(function(e){ showToast(e.message, "error"); });
+        }
+        break;
+      case "send-sim":
+        apiPost("/simulations/"+id+"/send", {}).then(function(){ showToast("Simulation sent"); loadSimulations(); }).catch(function(e){ showToast(e.message, "error"); });
+        break;
+      case "end-sim":
+        apiPost("/simulations/"+id+"/end", {}).then(function(){ showToast("Simulation ended"); loadSimulations(); }).catch(function(e){ showToast(e.message, "error"); });
+        break;
+    }
+  });
+
+  document.addEventListener("change", function(e){
+    var t = e.target.closest("[data-action]");
+    if(!t) return;
+    var action = t.dataset.action;
+    var id = t.dataset.id;
+    if(action === "toggle-rule"){
+      apiPatch("/rules/"+id+"/toggle", {}).then(function(){ showToast("Rule toggled"); }).catch(function(e){ showToast(e.message, "error"); });
+    }
+  });
+
+  document.getElementById("modal-add-connection").addEventListener("click", function(e){
+    if(e.target === this) this.classList.remove("open");
+  });
+
+  loaded["connections"] = true;
   loadConnections();
-} catch(e) {
-  document.getElementById('connectionsList').innerHTML = '<div class="empty-state"><p style="color:var(--red)">Init error: ' + e.message.replace(/</g,'&lt;') + '</p></div>';
-}
+})();
 </script>
 </body>
 </html>
