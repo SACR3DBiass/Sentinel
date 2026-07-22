@@ -21,6 +21,61 @@ app = FastAPI(title="SENTINEL Lite")
 JWT_SECRET = db.JWT_SECRET
 JWT_EXPIRY_HOURS = db.JWT_EXPIRY_HOURS
 
+# --- Rate limiting for lite registration ---
+_lite_auth_attempts: dict = {}
+LITE_AUTH_RATE_WINDOW = 60
+_lite_global_registrations: list = []
+LITE_REGISTRATION_GLOBAL_COOLDOWN = 10
+
+def _lite_client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        candidate = fwd.split(",")[0].strip()
+        try:
+            import ipaddress
+            ipaddress.ip_address(candidate)
+            return candidate
+        except ValueError:
+            pass
+    return request.client.host if request.client else "unknown"
+
+def _lite_enforce_rate_limit(request: Request, bucket: str, max_attempts: int, window: int = LITE_AUTH_RATE_WINDOW):
+    ip = _lite_client_ip(request)
+    key = f"lite:{bucket}:{ip}"
+    now = time.time()
+    attempts = [t for t in _lite_auth_attempts.get(key, []) if now - t < window]
+    if len(attempts) >= max_attempts:
+        retry = int(window - (now - attempts[0])) + 1
+        raise HTTPException(status_code=429, detail=f"Too many attempts. Try again in {retry}s.")
+    attempts.append(now)
+    _lite_auth_attempts[key] = attempts
+
+_DISPOSABLE_DOMAINS = {
+    "mailinator.com", "guerrillamail.com", "tempail.com", "throwaway.email",
+    "temp-mail.org", "fakeinbox.com", "sharklasers.com", "dispostable.com",
+    "yopmail.com", "yopmail.fr", "trashmail.com", "trashmail.me",
+    "trashmail.net", "maildrop.cc", "mailnesia.com", "tempomail.fr",
+    "mailcatch.com", "tempinbox.com", "discard.email", "discardmail.com",
+    "mailnull.com", "mohmal.com", "emailondeck.com", "10minutemail.com",
+    "getnada.com", "emailfake.com", "harakirimail.com", "tmail.ws",
+    "tmpmail.net", "tmpmail.org", "tmpmailer.com", "tempr.email",
+    "discardmail.de", "guerrillamail.de", "guerrillamail.info",
+    "guerrillamail.biz", "guerrillamail.se", "safetymail.info",
+    "filzmail.com", "20minutemail.com", "wegwerfmail.de", "wegwerfmail.net",
+    "wegwerfmail.org", "mailforspam.com", "spamavert.com", "mytemp.email",
+    "meltmail.com", "shortmail.net", "sibmail.com", "sinnlos-mail.de",
+    "sogetthis.com", "soodonims.com", "spamfree24.org", "spamhole.com",
+    "spamify.com", "superrito.com", "teleworm.us", "tempaddress.com",
+    "tempemail.biz", "tempemail.com", "tempemail.net", "tempmail.eu",
+    "tempmail.it", "tempmail2.com", "tempmailer.com", "tempmailer.de",
+    "temporarily.de", "tempthe.net", "thisisnotmyrealemail.com",
+    "throwawayemailaddress.com", "tmailinator.com", "trashemail.de",
+    "trashmail.at", "trashmail.ch", "trashmail.de", "trashmail.org",
+    "trashmailer.com", "trashymail.com", "trashymail.net", "wegwerfadresse.de",
+    "wegwerfemail.com", "wegwerfemail.de", "wuzup.net", "wuzupmail.net",
+    "xagloo.com", "xoxy.net", "zehnminutenmail.de",
+}
+
 LITE_PROMPT = """You are a phishing detection AI. Analyze the email below and determine if it is phishing, scam, or legitimate.
 
 Respond with ONLY valid JSON:
@@ -529,12 +584,26 @@ async def lite_dashboard_page():
 @app.post("/api/auth/register", include_in_schema=False)
 async def lite_register(payload: RegisterRequest, request: Request, response: Response):
     import re as _re
+    _lite_enforce_rate_limit(request, "register", max_attempts=3)
+    # Global registration cooldown
+    now = time.time()
+    recent = [t for t in _lite_global_registrations if now - t < LITE_REGISTRATION_GLOBAL_COOLDOWN]
+    _lite_global_registrations.clear()
+    _lite_global_registrations.extend(recent)
+    if _lite_global_registrations:
+        last = _lite_global_registrations[-1]
+        wait = int(LITE_REGISTRATION_GLOBAL_COOLDOWN - (now - last)) + 1
+        raise HTTPException(status_code=429, detail=f"Registration cooldown. Try again in {wait}s.")
     username = db.sanitize_input(payload.username, max_len=30)
     email = db.sanitize_input(payload.email, max_len=100).lower()
     if len(username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
     if "@" not in email or "." not in email:
         raise HTTPException(status_code=400, detail="Invalid email address")
+    # Block disposable email domains
+    domain = email.split("@")[-1]
+    if domain in _DISPOSABLE_DOMAINS:
+        raise HTTPException(status_code=400, detail="Disposable email addresses are not allowed")
     existing = db.user_get_by_username(username)
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -552,6 +621,7 @@ async def lite_register(payload: RegisterRequest, request: Request, response: Re
     user = db.user_create(username, email, pw_hash, org_id, user_id=None)
     if not user:
         raise HTTPException(status_code=409, detail="Email or username already taken")
+    _lite_global_registrations.append(time.time())
     db.user_set_role(user["id"], "friend")
     token = _create_token(user["id"], user["username"])
     refresh = db.refresh_token_create(user["id"])
@@ -564,6 +634,7 @@ async def lite_register(payload: RegisterRequest, request: Request, response: Re
 @app.post("/api/auth/login", include_in_schema=False)
 async def lite_login(payload: LoginRequest, request: Request, response: Response):
     import re as _re
+    _lite_enforce_rate_limit(request, "login", max_attempts=5)
     identifier = db.sanitize_input(payload.username, max_len=100)
     if "@" in identifier:
         identifier = identifier.lower()

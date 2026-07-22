@@ -189,6 +189,53 @@ def mark_scan_started(user_id: str):
 _auth_attempts: dict = {}  # "bucket:ip" -> [timestamps]
 AUTH_RATE_WINDOW = 60      # seconds
 
+# Global registration cooldown: any IP must wait this many seconds
+# after ANY registration across ALL IPs before registering again.
+_global_registrations: list = []  # [timestamp, ...]
+REGISTRATION_GLOBAL_COOLDOWN = 10  # seconds between any two registrations worldwide
+
+# Disposable / temporary email domains (partial list — block the obvious ones)
+_DISPOSABLE_DOMAINS = {
+    "mailinator.com", "guerrillamail.com", "guerrillamail.net", "tempail.com",
+    "throwaway.email", "temp-mail.org", "fakeinbox.com", "sharklasers.com",
+    "guerrillamailblock.com", "grr.la", "dispostable.com", "yopmail.com",
+    "yopmail.fr", "trashmail.com", "trashmail.me", "trashmail.net",
+    "maildrop.cc", "mailnesia.com", "tempomail.fr", "mailcatch.com",
+    "tempinbox.com", "discard.email", "discardmail.com", "mailnull.com",
+    "mohmal.com", "emailondeck.com", "10minutemail.com", "trashemail.de",
+    "getnada.com", "emailfake.com", "harakirimail.com", "tmail.ws",
+    "tmpmail.net", "tmpmail.org", "tmpmailer.com", "tempr.email",
+    "discardmail.de", "guerrillamail.de", "guerrillamail.info",
+    "guerrillamail.biz", "guerrillamail.se", "grr.la", "safetymail.info",
+    "filzmail.com", "20minutemail.com", "wegwerfmail.de", "wegwerfmail.net",
+    "wegwerfmail.org", "mailforspam.com", "spamavert.com", "mytemp.email",
+    "meltmail.com", "nospam.ze.tc", "nospamfor.us", "shortmail.net",
+    "sibmail.com", "sinnlos-mail.de", "sogetthis.com", "soodonims.com",
+    "spamfree24.org", "spamhole.com", "spamify.com", "stbiod.com",
+    "superrito.com", "teleworm.us", "tempaddress.com", "tempemail.biz",
+    "tempemail.co.za", "tempemail.com", "tempemail.net", "tempinbox.co.uk",
+    "tempmail.eu", "tempmail.it", "tempmail2.com", "tempmailer.com",
+    "tempmailer.de", "tempomail.fr", "temporarily.de", "tempthe.net",
+    "thankyou2010.com", "thisisnotmyrealemail.com", "throwawayemailaddress.com",
+    "tittbit.in", "tizi.com", "tmailinator.com", "toiea.com",
+    "toomail.biz", "topranklist.com", "tradermail.info", "trash-debris.com",
+    "trashdevil.com", "trashemail.de", "trashmail.at", "trashmail.ch",
+    "trashmail.com", "trashmail.de", "trashmail.me", "trashmail.net",
+    "trashmail.org", "trashmailer.com", "trashymail.com", "trashymail.net",
+    "trbvm.com", "trbvn.com", "trbvu.com", "trbvy.com", "trbwan.com",
+    "turual.com", "twinmail.de", "tyldd.com", "uggsrock.com",
+    "upliftnow.com", "uplipht.com", "venompen.com", "veryrealliemail.com",
+    "viditag.com", "viewcastmedia.com", "viewcastmedia.net", "viewcastmedia.org",
+    "weg-werf-email.de", "wegwerfadresse.de", "wegwerfemail.com",
+    "wegwerfemail.de", "wegwerfmail.de", "wegwerfmail.net", "wegwerfmail.org",
+    "wetrainbayarea.com", "wetrainbayarea.org", "wh4f.org", "whatiaas.com",
+    "whatpaas.com", "whyspam.me", "wickmail.net", "wilemail.com",
+    "willy.farms", "winemaven.info", "wronghead.com", "wuzup.net",
+    "wuzupmail.net", "wwwnew.eu", "xagloo.com", "xemaps.com",
+    "xents.com", "xjoi.com", "xmaily.com", "xoxy.net",
+    "zehnminutenmail.de",
+}
+
 def _client_ip(request: Request) -> str:
     """Best-effort real client IP. Only trusts X-Forwarded-For if it's a valid IP."""
     fwd = request.headers.get("x-forwarded-for", "")
@@ -1187,13 +1234,26 @@ async def startup():
 # ============================================================================
 @app.post("/api/auth/register", include_in_schema=False)
 async def register(payload: RegisterRequest, request: Request, response: Response):
-    enforce_rate_limit(request, "register", max_attempts=5)
+    enforce_rate_limit(request, "register", max_attempts=3)
+    # Global registration cooldown: prevent rapid signups across ALL IPs
+    now = time.time()
+    recent = [t for t in _global_registrations if now - t < REGISTRATION_GLOBAL_COOLDOWN]
+    _global_registrations.clear()
+    _global_registrations.extend(recent)
+    if _global_registrations:
+        last = _global_registrations[-1]
+        wait = int(REGISTRATION_GLOBAL_COOLDOWN - (now - last)) + 1
+        raise HTTPException(status_code=429, detail=f"Registration cooldown. Try again in {wait}s.")
     username = db.sanitize_input(payload.username, max_len=30)
     email = db.sanitize_input(payload.email, max_len=100).lower()
     if len(username) < 3:
         raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
     if "@" not in email or "." not in email:
         raise HTTPException(status_code=400, detail="Invalid email address")
+    # Block disposable email domains
+    domain = email.split("@")[-1]
+    if domain in _DISPOSABLE_DOMAINS:
+        raise HTTPException(status_code=400, detail="Disposable email addresses are not allowed")
     existing = user_get_by_username(username)
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -1212,6 +1272,7 @@ async def register(payload: RegisterRequest, request: Request, response: Respons
     user = user_create(username, email, password_hash, org_id)
     if not user:
         raise HTTPException(status_code=409, detail="Email or username already taken")
+    _global_registrations.append(time.time())
     token = create_token(user["id"], user["username"])
     refresh = db.refresh_token_create(user["id"])
     response.set_cookie(key="sentinel_token", value=token, httponly=True, secure=settings.COOKIE_SECURE, samesite="lax", max_age=900)
