@@ -258,7 +258,7 @@ function App(){
 
   if(loading) return React.createElement('div',{className:'loading'},'Loading...');
 
-  if(showKeyModal) return React.createElement('div',{className:'modal-overlay'},
+  if(_showKeyModal) return React.createElement('div',{className:'modal-overlay'},
     React.createElement('div',{className:'modal fade-up'},
       React.createElement('h2',null,'Welcome to SENTINEL Lite!'),
       React.createElement('p',{style:{color:'#888',fontSize:14,marginBottom:20}},'To start scanning emails, you need a free Groq API key:'),
@@ -279,7 +279,7 @@ function App(){
   var detailEmail=_showDetail;
 
   return React.createElement('div',null,
-    toast?React.createElement('div',{className:'toast '+toast.type},toast.msg):null,
+    _toast?React.createElement('div',{className:'toast '+_toast.type},_toast.msg):null,
     React.createElement('div',{className:'topbar'},
       React.createElement('div',{className:'topbar-left'},
         React.createElement('a',{href:'/lite',className:'logo'},
@@ -340,7 +340,7 @@ function App(){
         detailEmail.body_text?React.createElement('div',{className:'field'},React.createElement('label',null,'Email Body'),React.createElement('pre',{style:{background:'#0a0a0a',border:'1px solid #1a1a1a',borderRadius:8,padding:12,fontSize:12,fontFamily:'JetBrains Mono',color:'#888',whiteSpace:'pre-wrap',wordBreak:'break-word',maxHeight:200,overflow:'auto'}},detailEmail.body_text)):null
       )
     ):null,
-    showPaste?React.createElement('div',{className:'modal-overlay',onClick:function(){setShowPaste(false)}},
+    _showPaste?React.createElement('div',{className:'modal-overlay',onClick:function(){setShowPaste(false)}},
       React.createElement('div',{className:'modal fade-up',onClick:function(e){e.stopPropagation()}},
         React.createElement('button',{className:'modal-close',onClick:function(){setShowPaste(false)}},'\u00d7'),
         React.createElement('h2',null,'Paste Email for Analysis'),
@@ -350,7 +350,7 @@ function App(){
         React.createElement('button',{className:'btn primary',onClick:handlePaste,style:{width:'100%'}},'Analyze')
       )
     ):null,
-    showConn?React.createElement('div',{className:'modal-overlay',onClick:function(){setShowConn(false)}},
+    _showConn?React.createElement('div',{className:'modal-overlay',onClick:function(){setShowConn(false)}},
       React.createElement('div',{className:'modal fade-up',onClick:function(e){e.stopPropagation()}},
         React.createElement('button',{className:'modal-close',onClick:function(){setShowConn(false)}},'\u00d7'),
         React.createElement('h2',null,'Email Connections'),

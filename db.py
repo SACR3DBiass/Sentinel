@@ -14,6 +14,7 @@ import hashlib
 import html as _html_mod
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
+from collections import Counter
 
 _supabase_client = None
 _supabase_available = False
@@ -837,7 +838,7 @@ def user_get_by_email(email: str) -> Optional[dict]:
     # Local SQLite fallback
     try:
         import sqlite3 as _sqlite3
-        conn = _sqlite3.connect(_local_db_path())
+        conn = _sqlite3.connect(_USERS_DB)
         conn.row_factory = _sqlite3.Row
         cur = conn.cursor()
         cur.execute("SELECT * FROM users WHERE email = ?", (email,))
@@ -1010,7 +1011,7 @@ def email_connection_list(user_id: str) -> List[dict]:
     if sb:
         try:
             result = sb.table("email_connections").select(
-                "id,label,provider,imap_host,imap_username,imap_folder,is_active,last_scan_at,last_scan_count,scan_interval_minutes,created_at"
+                "id,org_id,label,provider,imap_host,imap_username,imap_folder,is_active,last_scan_at,last_scan_count,scan_interval_minutes,created_at"
             ).eq("user_id", user_id).order("created_at", desc=True).execute()
             return result.data or []
         except Exception:
@@ -1263,7 +1264,7 @@ def invite_accept(token: str, user_id: str) -> bool:
         # Update user role/org_id in local SQLite
         try:
             import sqlite3 as _sqlite3
-            conn = _sqlite3.connect(_local_db_path())
+            conn = _sqlite3.connect(_USERS_DB)
             cur = conn.cursor()
             cur.execute("UPDATE users SET role = ?, org_id = ? WHERE id = ?",
                         (invite.get("role", "member"), invite.get("org_id"), user_id))
@@ -1277,7 +1278,7 @@ def invite_list_org(org_id: str) -> List[dict]:
     sb = get_supabase()
     if sb:
         try:
-            result = sb.table("invites").select("id,email,role,accepted_at,expires_at,created_at").eq("org_id", org_id).is_("accepted_at", "null").execute()
+            result = sb.table("invites").select("id,email,role,token,accepted_at,expires_at,created_at").eq("org_id", org_id).is_("accepted_at", "null").execute()
             return result.data or []
         except Exception:
             pass
@@ -1790,8 +1791,7 @@ def calculate_cac(org_id: str) -> float:
     if not created:
         return 0
     try:
-        from dateutil.parser import parse as dateparse
-        signup_dt = dateparse(created)
+        signup_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
         days = (datetime.utcnow() - signup_dt).days
     except Exception:
         days = 30
@@ -2741,8 +2741,9 @@ async def alert_send(user_id: str, email_subject: str, sender: str, threat_level
         return
     alert_level = config.get("alert_level", "malicious")
     if alert_level == "malicious" and threat_level not in ("malicious",):
-        if alert_level == "suspicious" and threat_level not in ("malicious", "suspicious"):
-            return
+        return
+    if alert_level == "suspicious" and threat_level not in ("malicious", "suspicious"):
+        return
     platform = config.get("platform", "slack")
     url = config["webhook_url"]
     color = "#DC2626" if threat_level == "malicious" else "#EAB308" if threat_level == "suspicious" else "#22C55E"

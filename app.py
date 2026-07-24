@@ -1495,7 +1495,7 @@ async def change_password(payload: ChangePasswordRequest, request: Request, resp
             pass
     try:
         import sqlite3 as _sqlite3
-        conn = _sqlite3.connect(db._local_db_path())
+        conn = _sqlite3.connect(db._USERS_DB)
         conn.execute("UPDATE users SET password_hash=? WHERE id=?", (new_hash, user["user_id"]))
         conn.commit()
         conn.close()
@@ -3003,8 +3003,8 @@ def _build_report_data(org_id: str = None, user_id: str = None) -> dict:
         "total": total, "malicious": malicious, "suspicious": suspicious, "safe": safe,
         "threats_blocked": malicious + suspicious, "estimated_cost_prevented": (malicious + suspicious) * settings.COST_PER_INCIDENT,
         "feedback_count": feedback_count, "false_positives": false_positives, "false_negatives": false_negatives,
-        "unique_targets": len(targets), "top_targets": dict(targets.most_common(5)),
-        "top_senders": dict(senders.most_common(5)),
+        "unique_targets": len(targets), "top_targets": targets.most_common(5),
+        "top_senders": senders.most_common(5),
         "period_start": period_start, "period_end": now.isoformat(),
     }
 
@@ -5167,7 +5167,7 @@ select.input{cursor:pointer;appearance:auto}
       <div class="form-row">
         <div class="form-group">
           <label class="label">Folder</label>
-          <input class="input" type="text" name="folder" value="INBOX">
+          <input class="input" type="text" name="imap_folder" value="INBOX">
         </div>
         <div class="form-group">
           <label class="label">Scan Interval (hours)</label>
