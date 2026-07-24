@@ -184,6 +184,104 @@ def mark_scan_started(user_id: str):
     _scan_cooldowns[user_id] = time.time()
 
 # ============================================================================
+# VOLUME QUEUE & PER-USER/ORG RATE LIMITING
+# ============================================================================
+# Per-org email volume tracking: org_id -> [timestamps of processed emails]
+_org_volume: dict = {}
+ORG_VOLUME_WINDOW = 3600       # 1 hour rolling window
+ORG_VOLUME_LIMIT = 20          # max emails analyzed per org per hour
+_org_volume_queue: dict = {}    # org_id -> [queued email dicts]
+_org_volume_alerted: dict = {}  # org_id -> last alert timestamp (avoid spam)
+ORG_VOLUME_ALERT_COOLDOWN = 3600  # re-alert at most once per hour
+
+# Per-user API rate limiting: "user_id:bucket" -> [timestamps]
+_user_api_attempts: dict = {}
+USER_API_RATE_WINDOW = 60      # 1 minute window
+USER_API_RATE_LIMIT = 30       # max API calls per user per minute
+
+# Per-org API rate limiting: "org_id:bucket" -> [timestamps]
+_org_api_attempts: dict = {}
+ORG_API_RATE_WINDOW = 60
+ORG_API_RATE_LIMIT = 100       # max API calls per org per minute (shared across users)
+
+def _track_org_volume(org_id: str) -> bool:
+    """Record an email analysis for the org. Returns True if within limit, False if queued."""
+    if not org_id:
+        return True
+    now = time.time()
+    timestamps = [t for t in _org_volume.get(org_id, []) if now - t < ORG_VOLUME_WINDOW]
+    if len(timestamps) >= ORG_VOLUME_LIMIT:
+        _org_volume[org_id] = timestamps
+        return False  # over limit — caller should queue
+    timestamps.append(now)
+    _org_volume[org_id] = timestamps
+    return True
+
+def _get_org_volume_count(org_id: str) -> int:
+    if not org_id:
+        return 0
+    now = time.time()
+    return len([t for t in _org_volume.get(org_id, []) if now - t < ORG_VOLUME_WINDOW])
+
+def _queue_email_for_org(org_id: str, email_data: dict):
+    """Add an email to the org's overflow queue."""
+    if org_id not in _org_volume_queue:
+        _org_volume_queue[org_id] = []
+    _org_volume_queue[org_id].append(email_data)
+    print(f"[SENTINEL] Volume queue: org={org_id} queued={len(_org_volume_queue[org_id])}", flush=True)
+
+def _get_queued_emails(org_id: str) -> list:
+    return _org_volume_queue.pop(org_id, [])
+
+def _check_and_alert_high_volume(org_id: str):
+    """Trigger high volume alert for an org if cooldown has passed."""
+    if not org_id:
+        return
+    now = time.time()
+    last_alert = _org_volume_alerted.get(org_id, 0)
+    if now - last_alert < ORG_VOLUME_ALERT_COOLDOWN:
+        return
+    _org_volume_alerted[org_id] = now
+    count = _get_org_volume_count(org_id)
+    print(f"[SENTINEL] HIGH VOLUME ALERT: org={org_id} processed={count} emails in last hour", flush=True)
+    db.audit_log("high_volume_detected", details=f"org_id={org_id} emails_in_hour={count}", success=False)
+
+def enforce_user_api_rate(user_id: str):
+    """Raise 429 if a user exceeds per-user API rate limit."""
+    key = f"{user_id}:api"
+    now = time.time()
+    attempts = [t for t in _user_api_attempts.get(key, []) if now - t < USER_API_RATE_WINDOW]
+    if len(attempts) >= USER_API_RATE_LIMIT:
+        retry = int(USER_API_RATE_WINDOW - (now - attempts[0])) + 1
+        raise HTTPException(status_code=429, detail=f"API rate limit exceeded. Try again in {retry}s.")
+    attempts.append(now)
+    _user_api_attempts[key] = attempts
+
+def enforce_org_api_rate(org_id: str):
+    """Raise 429 if an org exceeds shared API rate limit."""
+    if not org_id:
+        return
+    key = f"{org_id}:api"
+    now = time.time()
+    attempts = [t for t in _org_api_attempts.get(key, []) if now - t < ORG_API_RATE_WINDOW]
+    if len(attempts) >= ORG_API_RATE_LIMIT:
+        retry = int(ORG_API_RATE_WINDOW - (now - attempts[0])) + 1
+        raise HTTPException(status_code=429, detail=f"Organization API rate limit exceeded. Try again in {retry}s.")
+    attempts.append(now)
+    _org_api_attempts[key] = attempts
+
+def get_volume_status(org_id: str) -> dict:
+    """Return current volume status for an org (used by dashboard)."""
+    count = _get_org_volume_count(org_id)
+    queued = len(_org_volume_queue.get(org_id, []))
+    return {
+        "emails_this_hour": count,
+        "volume_limit": ORG_VOLUME_LIMIT,
+        "remaining": max(0, ORG_VOLUME_LIMIT - count),
+        "queued": queued,
+    }
+
+# ============================================================================
 # AUTH RATE LIMITER (per-IP, in-memory sliding window)
 # ============================================================================
 _auth_attempts: dict = {}  # "bucket:ip" -> [timestamps]
@@ -1956,6 +2054,17 @@ async def analyze_paste(payload: PasteEmailRequest, request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    enforce_user_api_rate(user["user_id"])
+    user_db = resolve_user_db(user)
+    org_id = user_db.get("org_id") if user_db else db.get_or_create_default_org()
+    if org_id:
+        enforce_org_api_rate(org_id)
+        within_limit = _track_org_volume(org_id)
+        if not within_limit:
+            _check_and_alert_high_volume(org_id)
+            _queue_email_for_org(org_id, {"parsed": {}, "meta": {"text_body": payload.content},
+                                           "user_id": user["user_id"], "org_id": org_id, "conn": {}})
+            return {"status": "queued", "message": "Volume limit reached. Email queued for later analysis."}
     forwarded = ForwardedEmailParser.extract_forwarded_content(payload.content)
     from_addr = forwarded.get("from_address") or payload.from_address or "unknown"
     subject = forwarded.get("subject") or payload.subject or "No Subject"
@@ -2010,6 +2119,7 @@ async def imap_check(request: Request):
     user = get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
+    enforce_user_api_rate(user["user_id"])
     wait = check_scan_cooldown(user["user_id"])
     if wait > 0:
         raise HTTPException(status_code=429, detail=f"Scan cooldown. Wait {wait}s before scanning again.")
@@ -2147,16 +2257,34 @@ async def imap_check(request: Request):
             except Exception:
                 pass
             print(f"[SENTINEL] imap/check {conn.get('label')}: {len(parsed_batch)} new, {skipped} skipped", flush=True)
+            org_id_conn = conn_full.get("org_id", "")
+            queued_count = 0
+            analyzed_count = 0
             for batch_start in range(0, len(parsed_batch), BATCH_SIZE):
                 batch = parsed_batch[batch_start:batch_start + BATCH_SIZE]
                 meta = meta_batch[batch_start:batch_start + BATCH_SIZE]
-                verdicts = await analyzer.analyze_batch(batch, org_id=conn_full.get("org_id", ""))
-                for i, (parsed, verdict_data) in enumerate(zip(batch, verdicts)):
-                    text_body = meta[i]["text_body"]
+                # Volume check: queue overflow instead of analyzing
+                for bi, (parsed_b, meta_b) in enumerate(zip(batch, meta)):
+                    within_limit = _track_org_volume(org_id_conn)
+                    if not within_limit:
+                        _check_and_alert_high_volume(org_id_conn)
+                        _queue_email_for_org(org_id_conn, {
+                            "parsed": parsed_b, "meta": meta_b,
+                            "user_id": user["user_id"], "conn": dict(conn),
+                            "org_id": org_id_conn,
+                        })
+                        queued_count += 1
+                        continue
+                    # Analyze single email within volume limit
+                    verdicts = await analyzer.analyze_batch([parsed_b], org_id=org_id_conn)
+                    if not verdicts:
+                        continue
+                    verdict_data = verdicts[0]
+                    text_body = meta_b["text_body"]
                     email_id = f"email-{uuid.uuid4().hex[:12]}"
                     record = {
                         "id": email_id,
-                        **parsed,
+                        **parsed_b,
                         "received_at": datetime.now().isoformat(),
                         "source": "imap_scan",
                         "is_forwarded": ForwardedEmailParser.is_forwarded(text_body),
@@ -2168,21 +2296,22 @@ async def imap_check(request: Request):
                         },
                     }
                     store_set(user["user_id"], email_id, record)
-                    total_processed.append({"email_id": email_id, "subject": parsed["subject"], "threat_level": verdict_data.get("threat_level"), "confidence": verdict_data.get("confidence")})
+                    total_processed.append({"email_id": email_id, "subject": parsed_b["subject"], "threat_level": verdict_data.get("threat_level"), "confidence": verdict_data.get("confidence")})
+                    analyzed_count += 1
 
                     # Trigger webhook alert for threats
                     threat_level = verdict_data.get("threat_level", "safe")
                     if threat_level in ("malicious", "suspicious"):
                         try:
-                            await db.alert_send(user["user_id"], parsed.get("subject", ""),
-                                                parsed.get("from_address", ""), threat_level,
+                            await db.alert_send(user["user_id"], parsed_b.get("subject", ""),
+                                                parsed_b.get("from_address", ""), threat_level,
                                                 verdict_data.get("confidence", 0) * 100,
                                                 verdict_data.get("reasoning_summary", ""))
                         except Exception:
                             pass
                         try:
-                            urls = parsed.get("urls", [])
-                            sender_addr = parsed.get("from_address", "")
+                            urls = parsed_b.get("urls", [])
+                            sender_addr = parsed_b.get("from_address", "")
                             if sender_addr and "@" in sender_addr:
                                 domain = sender_addr.split("@")[-1].strip().lower()
                                 if domain and "." in domain:
@@ -2215,6 +2344,198 @@ async def imap_status():
         "username": imap_service.username,
         "poll_interval": settings.IMAP_POLL_INTERVAL,
     }
+
+@app.get("/api/v1/volume/status")
+async def volume_status(request: Request):
+    """Return current email volume status for the user's org."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = resolve_user_db(user)
+    org_id = user_db.get("org_id") if user_db else None
+    if not org_id:
+        org_id = db.get_or_create_default_org()
+    status = get_volume_status(org_id)
+    status["org_id"] = org_id
+    return status
+
+@app.post("/api/v1/volume/drain")
+async def volume_drain(request: Request):
+    """Process queued emails for the user's org (called manually or by cron)."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = resolve_user_db(user)
+    org_id = user_db.get("org_id") if user_db else None
+    if not org_id:
+        org_id = db.get_or_create_default_org()
+    queued = _get_queued_emails(org_id)
+    if not queued:
+        return {"status": "success", "drained": 0, "message": "No queued emails"}
+    drained = 0
+    for item in queued:
+        within_limit = _track_org_volume(org_id)
+        if not within_limit:
+            _queue_email_for_org(org_id, item)
+            break
+        parsed = item["parsed"]
+        verdicts = await analyzer.analyze_batch([parsed], org_id=org_id)
+        if not verdicts:
+            continue
+        verdict_data = verdicts[0]
+        uid = item["user_id"]
+        email_id = f"email-{uuid.uuid4().hex[:12]}"
+        text_body = item["meta"]["text_body"]
+        record = {
+            "id": email_id,
+            **parsed,
+            "received_at": datetime.now().isoformat(),
+            "source": "imap_scan_queued",
+            "is_forwarded": ForwardedEmailParser.is_forwarded(text_body),
+            "verdict": {
+                "id": f"verdict-{uuid.uuid4().hex[:12]}",
+                "email_id": email_id,
+                **verdict_data,
+                "analyzed_at": datetime.now().isoformat(),
+            },
+        }
+        store_set(uid, email_id, record)
+        drained += 1
+        if verdict_data.get("threat_level") in ("malicious", "suspicious"):
+            try:
+                await db.alert_send(uid, parsed.get("subject", ""),
+                                    parsed.get("from_address", ""), verdict_data["threat_level"],
+                                    verdict_data.get("confidence", 0) * 100,
+                                    verdict_data.get("reasoning_summary", ""))
+            except Exception:
+                pass
+    return {"status": "success", "drained": drained, "remaining": len(_org_volume_queue.get(org_id, []))}
+
+# ============================================================================
+# FINANCIAL TRACKING & ACQUISITION METRICS
+# ============================================================================
+
+@app.post("/api/v1/finance/subscription")
+async def record_subscription_event(request: Request):
+    """Record a subscription event (signup, upgrade, cancellation, etc.)."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = resolve_user_db(user)
+    role = user_db.get("role", "member") if user_db else "member"
+    if role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Only admins can record subscription events")
+    body = await request.json()
+    org_id = body.get("org_id") or (user_db.get("org_id") if user_db else None)
+    if not org_id:
+        org_id = db.get_or_create_default_org()
+    event_type = body.get("event_type", "signup")
+    plan_name = body.get("plan_name", "free")
+    monthly_amount = float(body.get("monthly_amount", 0))
+    billing_cycle = body.get("billing_cycle", "monthly")
+    payment_status = body.get("payment_status", "paid")
+    stripe_id = body.get("stripe_subscription_id", "")
+    notes = body.get("notes", "")
+    result = db.subscription_record_event(
+        org_id, event_type, plan_name, monthly_amount, billing_cycle,
+        payment_status, stripe_id, notes,
+    )
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to record subscription event")
+    db.audit_log("subscription_event", user["user_id"], user.get("username", ""),
+                 f"event={event_type} plan={plan_name} amount={monthly_amount}")
+    return {"status": "success", "event": result}
+
+@app.get("/api/v1/finance/subscription")
+async def list_subscription_events(request: Request, org_id: str = None):
+    """List subscription history for the user's org."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = resolve_user_db(user)
+    target_org = org_id or (user_db.get("org_id") if user_db else None)
+    if not target_org:
+        target_org = db.get_or_create_default_org()
+    events = db.subscription_list_org(target_org)
+    return {"events": events}
+
+@app.get("/api/v1/finance/metrics")
+async def get_org_metrics(request: Request, org_id: str = None):
+    """Get CAC, churn risk, and metrics for an org."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = resolve_user_db(user)
+    target_org = org_id or (user_db.get("org_id") if user_db else None)
+    if not target_org:
+        target_org = db.get_or_create_default_org()
+    cac = db.calculate_cac(target_org)
+    churn_risk = db.calculate_churn_risk(target_org)
+    sub = db.subscription_get_current(target_org)
+    metrics_history = db.org_metrics_list_org(target_org, limit=6)
+    return {
+        "org_id": target_org,
+        "cac": cac,
+        "churn_risk_score": churn_risk,
+        "current_subscription": sub,
+        "metrics_history": metrics_history,
+    }
+
+@app.post("/api/v1/finance/metrics/record")
+async def record_org_metrics(request: Request):
+    """Record a monthly metrics snapshot for an org."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = resolve_user_db(user)
+    role = user_db.get("role", "member") if user_db else "member"
+    if role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Only admins can record metrics")
+    body = await request.json()
+    org_id = body.get("org_id") or (user_db.get("org_id") if user_db else None)
+    if not org_id:
+        org_id = db.get_or_create_default_org()
+    from datetime import timedelta as _td
+    now = datetime.utcnow()
+    period_start = body.get("period_start", (now - _td(days=30)).isoformat())
+    period_end = body.get("period_end", now.isoformat())
+    result = db.org_metrics_record(
+        org_id=org_id,
+        period_start=period_start,
+        period_end=period_end,
+        mrr=float(body.get("mrr", 0)),
+        cac=float(body.get("cac", 0)),
+        ltv=float(body.get("ltv", 0)),
+        churn_risk_score=float(body.get("churn_risk_score", 0)),
+        is_churned=bool(body.get("is_churned", False)),
+        days_since_signup=int(body.get("days_since_signup", 0)),
+        total_emails_analyzed=int(body.get("total_emails_analyzed", 0)),
+        total_threats_blocked=int(body.get("total_threats_blocked", 0)),
+        sessions_in_period=int(body.get("sessions_in_period", 0)),
+        notes=body.get("notes", ""),
+    )
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to record metrics")
+    return {"status": "success", "metrics": result}
+
+@app.get("/api/v1/finance/export/csv")
+async def export_financial_csv(request: Request, org_id: str = None):
+    """Export subscription and churn data as CSV."""
+    user = get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user_db = resolve_user_db(user)
+    role = user_db.get("role", "member") if user_db else "member"
+    if role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Only admins can export financial data")
+    target_org = org_id or (user_db.get("org_id") if user_db else None)
+    org_ids = [target_org] if target_org else None
+    csv_content = db.export_financial_csv(org_ids)
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=sentinel_financial_export.csv"},
+    )
 
 # ============================================================================
 # FEEDBACK & WHITELIST API (Task 3: Defensibility / Feedback Loop)

@@ -4,6 +4,8 @@ A B2B SaaS cybersecurity platform that uses AI to analyze employee-reported phis
 
 **Cost: $0** - Runs entirely on free-tier services.
 
+**Features:** AI phishing analysis, IMAP inbox scanning, explainable AI (XAI), feedback loop with auto-whitelisting, ROI-optimized executive PDF reports, per-org volume queueing (20 emails/hour limit), per-user/org API rate limiting, subscription & churn tracking, CAC/LTV metrics, CSV financial export.
+
 ---
 
 ## Architecture
@@ -161,9 +163,28 @@ sentinel/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/reports/monthly` | Download monthly PDF report |
+| `GET` | `/api/v1/reports/monthly` | Download monthly PDF report (includes ROI section) |
 | `GET` | `/api/v1/reports/monthly/data` | Get monthly data as JSON |
 | `GET` | `/api/v1/db/status` | Database connection status |
+
+### Volume Queueing & Cost Protection
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/volume/status` | Get org email volume status (limit, remaining, queued) |
+| `POST` | `/api/v1/volume/drain` | Process queued emails for the org |
+
+**Rate Limits:** 30 API calls/user/min, 100 API calls/org/min, 20 emails analyzed/org/hour.
+
+### Financial Tracking & Acquisition Metrics
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/finance/subscription` | Record subscription event (signup, upgrade, cancellation) |
+| `GET` | `/api/v1/finance/subscription` | List subscription history for org |
+| `GET` | `/api/v1/finance/metrics` | Get CAC, churn risk, and metrics history |
+| `POST` | `/api/v1/finance/metrics/record` | Record monthly metrics snapshot |
+| `GET` | `/api/v1/finance/export/csv` | Export financial data as CSV (owner/admin only) |
 
 ---
 
@@ -258,6 +279,93 @@ python test_v3.py
 | Reporting | 2 | PDF generation, JSON data endpoint |
 | Database | 1 | Supabase connection status |
 | Pages | 3 | Landing, login, dashboard load |
+| Volume Queueing | 4 | Per-user/org rate limits, overflow queue, high volume alerts |
+| Financial Tracking | 5 | Subscription events, CAC, churn risk, CSV export |
+| ROI PDF | 2 | ROI calculation, costs prevented display |
+
+### Testing Volume Queueing System
+
+The volume queueing system limits each organization to 20 email analyses per hour. Excess emails are queued for later processing.
+
+```bash
+# Start the server
+python app.py
+
+# 1. Check volume status (returns emails_this_hour, remaining, queued)
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/volume/status
+
+# 2. Simulate high volume by triggering multiple scans rapidly
+# Each IMAP check processes up to 15 emails. After ~2 scans, you'll hit the 20/hour limit.
+for i in {1..5}; do
+  curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+    -d '{}' http://localhost:8000/api/v1/imap/check
+  echo "Scan $i complete"
+done
+
+# 3. Check volume status again — should show remaining=0 and queued>0
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/volume/status
+
+# 4. Drain queued emails manually (processes up to 20 per call)
+curl -X POST -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/volume/drain
+
+# 5. Paste analysis also respects volume limits
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"content": "From: phish@evil.com\nSubject: URGENT\nClick here to verify."}' \
+  http://localhost:8000/api/v1/analyze/paste
+# If volume limit hit: returns {"status": "queued", "message": "Volume limit reached..."}
+
+# 6. Per-user API rate limit: 30 requests/minute
+# Rapid-fire requests will return 429 after 30 calls
+```
+
+**What happens when volume limit is hit:**
+- IMAP scan emails beyond 20/hour are queued in memory
+- A `high_volume_detected` audit log event is triggered
+- The scan response includes `queued_count` in the results
+- Admin can manually drain the queue via `POST /api/v1/volume/drain`
+- Queued emails are analyzed with full AI verdicts when drained
+
+### Testing Financial Tracking
+
+```bash
+# 1. Record a subscription event (requires owner/admin role)
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"event_type": "signup", "plan_name": "pro", "monthly_amount": 299, "billing_cycle": "monthly"}' \
+  http://localhost:8000/api/v1/finance/subscription
+
+# 2. List subscription history
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/finance/subscription
+
+# 3. Get CAC and churn risk metrics
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/finance/metrics
+
+# 4. Record monthly metrics snapshot
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"mrr": 299, "cac": 150, "ltv": 3588, "total_emails_analyzed": 450, "total_threats_blocked": 12}' \
+  http://localhost:8000/api/v1/finance/metrics/record
+
+# 5. Export all financial data as CSV
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/finance/export/csv -o financial_export.csv
+```
+
+### Testing ROI PDF Reports
+
+```bash
+# 1. Download monthly PDF report (now includes dedicated ROI section)
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:8000/api/v1/reports/monthly -o report.pdf
+
+# 2. Get the raw report data JSON (includes roi_percentage, net_savings)
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:8000/api/v1/reports/monthly/data
+```
+
+**ROI section in PDF includes:**
+- Total threats blocked × cost per breach = total costs prevented
+- SENTINEL platform cost ($299/month default)
+- Net savings = costs prevented - platform cost
+- ROI % = (net savings / platform cost) × 100
+- Threats blocked per dollar spent
 
 ### Manual Testing
 
@@ -326,6 +434,43 @@ curl -H "Authorization: Bearer <token>" \
 | pattern_value | TEXT | The pattern to match |
 | source | TEXT | manual/feedback_auto |
 | hit_count | INTEGER | Times this pattern matched |
+
+### subscription_history (New)
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key |
+| org_id | UUID | FK → organizations |
+| event_type | TEXT | signup/upgrade/downgrade/cancellation/trial_start/trial_end |
+| plan_name | TEXT | free/pro/enterprise |
+| monthly_amount | NUMERIC | Monthly subscription cost |
+| billing_cycle | TEXT | monthly/annual/one_time |
+| payment_status | TEXT | pending/paid/failed/refunded/cancelled |
+| occurred_at | TIMESTAMPTZ | When the event occurred |
+
+### org_metrics (New)
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key |
+| org_id | UUID | FK → organizations |
+| period_start | TIMESTAMPTZ | Metrics period start |
+| period_end | TIMESTAMPTZ | Metrics period end |
+| mrr | NUMERIC | Monthly recurring revenue |
+| cac | NUMERIC | Customer acquisition cost |
+| ltv | NUMERIC | Lifetime value |
+| churn_risk_score | NUMERIC | 0-100 churn risk |
+| is_churned | BOOLEAN | Whether org has churned |
+| total_emails_analyzed | INTEGER | Emails analyzed in period |
+| total_threats_blocked | INTEGER | Threats blocked in period |
+
+### conversions (New)
+| Column | Type | Description |
+|--------|------|-------------|
+| id | UUID | Primary key |
+| lead_id | UUID | FK → leads |
+| org_id | UUID | FK → organizations |
+| source | TEXT | Conversion source |
+| plan_name | TEXT | Plan they converted to |
+| signup_to_convert_hours | NUMERIC | Hours from signup to conversion |
 
 **Row-Level Security (RLS)** is enabled on all tables with service-role bypass policies.
 

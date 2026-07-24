@@ -178,6 +178,57 @@ def generate_monthly_report_pdf(
     story.append(cost_table)
     story.append(Spacer(1, 16))
 
+    # --- ROI Calculation ---
+    platform_cost = report_data.get("platform_cost", 0)
+    if platform_cost <= 0:
+        platform_cost = report_data.get("monthly_subscription_cost", 0)
+    if platform_cost <= 0:
+        platform_cost = 299.00  # SENTINEL estimated platform cost
+    roi_pct = ((estimated_cost - platform_cost) / platform_cost * 100) if platform_cost > 0 else 0
+    net_savings = estimated_cost - platform_cost
+    threats_per_dollar = threats_blocked / platform_cost if platform_cost > 0 else 0
+
+    story.append(Paragraph("Return on Investment (ROI)", styles["SectionHeader"]))
+    roi_data = [
+        [Paragraph("<b>ROI Metric</b>", styles["BodyTextWrap"]),
+         Paragraph("<b>Value</b>", styles["BodyTextWrap"])],
+        [Paragraph("Total Threats Blocked", styles["BodyTextWrap"]),
+         Paragraph(str(threats_blocked), styles["BodyTextWrap"])],
+        [Paragraph("Average Cost Per Breach (Industry)", styles["BodyTextWrap"]),
+         Paragraph(f"${cost_per_incident:,.2f}", styles["BodyTextWrap"])],
+        [Paragraph("<b>Total Costs Prevented</b>", styles["BodyTextWrap"]),
+         Paragraph(f"<b>${estimated_cost:,.2f}</b>", ParagraphStyle("cost2", parent=styles["BodyTextWrap"], textColor=GREEN, fontName="Helvetica-Bold"))],
+        [Paragraph("SENTINEL Platform Cost (Monthly)", styles["BodyTextWrap"]),
+         Paragraph(f"${platform_cost:,.2f}", styles["BodyTextWrap"])],
+        [Paragraph("<b>Net Savings (Costs Prevented - Platform)</b>", styles["BodyTextWrap"]),
+         Paragraph(f"<b>${net_savings:,.2f}</b>", ParagraphStyle("savings", parent=styles["BodyTextWrap"], textColor=GREEN, fontName="Helvetica-Bold"))],
+        [Paragraph("<b>ROI Percentage</b>", styles["BodyTextWrap"]),
+         Paragraph(f"<b>{roi_pct:,.0f}%</b>", ParagraphStyle("roi", parent=styles["BodyTextWrap"], textColor=HexColor("#059669"), fontName="Helvetica-Bold", fontSize=14))],
+        [Paragraph("Threats Blocked Per Dollar Spent", styles["BodyTextWrap"]),
+         Paragraph(f"{threats_per_dollar:.2f}", styles["BodyTextWrap"])],
+    ]
+    roi_table = Table(roi_data, colWidths=[4 * inch, 3 * inch])
+    roi_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), HexColor("#059669")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), WHITE),
+        ("BACKGROUND", (0, 1), (-1, -1), LIGHT_GRAY),
+        ("GRID", (0, 0), (-1, -1), 0.5, HexColor("#e0e0e0")),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("BACKGROUND", (0, 6), (-1, 6), HexColor("#ECFDF5")),
+        ("BACKGROUND", (0, 4), (-1, 4), HexColor("#ECFDF5")),
+    ]))
+    story.append(roi_table)
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(
+        f"For every $1 spent on SENTINEL, your organization saved ${threats_per_dollar:,.2f} in estimated breach costs this period.",
+        ParagraphStyle("roi_note", parent=styles["BodyTextWrap"], textColor=HexColor("#059669"), fontName="Helvetica-Bold")
+    ))
+    story.append(Spacer(1, 16))
+
     # --- AI Feedback Accuracy ---
     feedback_count = report_data.get("feedback_count", 0)
     false_positives = report_data.get("false_positives", 0)
